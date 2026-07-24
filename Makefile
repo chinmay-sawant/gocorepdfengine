@@ -104,3 +104,10 @@ bench-zerodha-x10:
 	bash $(ZERODHA_DIR)/run_bench_x10.sh
 
 bench-zerodha-x10-pprof: bench-zerodha-x10 bench-zerodha-x5
+
+# ── Full-template financial report ────────────────────────────────────────────
+
+FINANCIAL_DIR := sampledata/financial
+
+bench-financial:
+	cd $(FINANCIAL_DIR) && go run .

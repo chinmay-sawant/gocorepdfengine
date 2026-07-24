@@ -39,13 +39,13 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 		start.PlaceWatermark(note.Watermark, pageW, pageH)
 	}
 
-	builders, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
+	res, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
 	if err != nil {
 		return nil, err
 	}
 
-	pages := make([]engine.PageContent, 0, len(builders))
-	for _, b := range builders {
+	pages := make([]engine.PageContent, 0, len(res.Builders))
+	for _, b := range res.Builders {
 		pages = append(pages, engine.PageContent{
 			Stream:    b.Bytes(),
 			FontRes:   b.FontRes,

@@ -32,12 +32,27 @@ type TableLayout struct {
 	Rows      []Row
 }
 
-func (tl *TableLayout) LayOut(marginLeft, marginTop, pageW, pageH float64, startCB *ContentBuilder) ([]*ContentBuilder, error) {
+// LayoutResult holds the builders and the final y position after laying out rows.
+type LayoutResult struct {
+	Builders []*ContentBuilder
+	Y        float64
+}
+
+func (tl *TableLayout) LayOut(marginLeft, marginTop, pageW, pageH float64, startCB *ContentBuilder) (LayoutResult, error) {
+	contentBottom := marginTop
+	return tl.layOutFrom(marginLeft, marginTop, pageW, pageH, pageH-marginTop, startCB, contentBottom)
+}
+
+// LayOutFrom continues laying out rows starting from a given y position.
+// Useful when chaining multiple TableLayouts on the same content builder.
+func (tl *TableLayout) LayOutFrom(marginLeft, marginTop, pageW, pageH, y float64, startCB *ContentBuilder) (LayoutResult, error) {
+	contentBottom := marginTop
+	return tl.layOutFrom(marginLeft, marginTop, pageW, pageH, y, startCB, contentBottom)
+}
+
+func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64, startCB *ContentBuilder, contentBottom float64) (LayoutResult, error) {
 	builders := []*ContentBuilder{startCB}
 	cb := startCB
-
-	contentBottom := marginTop
-	y := pageH - marginTop
 
 	for _, row := range tl.Rows {
 		if y-row.Height < contentBottom {
@@ -107,7 +122,7 @@ func (tl *TableLayout) LayOut(marginLeft, marginTop, pageW, pageH float64, start
 		y -= row.Height
 	}
 
-	return builders, nil
+	return LayoutResult{Builders: builders, Y: y}, nil
 }
 
 func drawSide(cb *ContentBuilder, r Rect, bs *BorderStyle, side string) {
