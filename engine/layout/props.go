@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Alignment controls horizontal text alignment within a cell.
 type Alignment int
 
 const (
@@ -14,8 +15,11 @@ const (
 	AlignRight  Alignment = 2
 )
 
-type CellBorder [4]bool // left, right, top, bottom (per TEMPLATE_REFERENCE.md)
+// CellBorder is a four-element array indicating which sides have a border:
+// index 0 = left, 1 = right, 2 = top, 3 = bottom.
+type CellBorder [4]bool
 
+// CellProps holds parsed colon-separated style properties for a cell.
 type CellProps struct {
 	FontName  string
 	FontSize  float64
@@ -26,6 +30,7 @@ type CellProps struct {
 	Border    CellBorder
 }
 
+// ParseProps parses an 8-field colon-separated property string into CellProps.
 func ParseProps(s string) (CellProps, error) {
 	parts := strings.Split(s, ":")
 	if len(parts) != 8 {

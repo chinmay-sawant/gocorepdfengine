@@ -1,3 +1,5 @@
+// Package color provides PDF color primitives including RGB representation
+// and hex color parsing.
 package color
 
 import (
@@ -37,29 +39,41 @@ func ParseHex(s string) (RGB, error) {
 	}
 }
 
-// MustHex panics on parse error (for static theme constants).
-func MustHex(s string) RGB {
-	c, err := ParseHex(s)
-	if err != nil {
-		panic(err)
-	}
-	return c
+// MustHex parses a hex color string and returns the RGB triple.
+// It returns an error if s is not a valid hex color.
+func MustHex(s string) (RGB, error) {
+	return ParseHex(s)
 }
 
 // Zerodha-style theme used by contract-note layout.
 var (
-	ThemeHeaderBG   = MustHex("#154360")
-	ThemeHeaderFG   = MustHex("#FFFFFF")
-	ThemeHeaderSub  = MustHex("#AED6F1")
-	ThemeSectionBG  = MustHex("#21618C")
-	ThemeSectionFG  = MustHex("#FFFFFF")
-	ThemeTableHead  = MustHex("#D4E6F1")
-	ThemeAltRow     = MustHex("#F8F9F9")
-	ThemeInfoRow    = MustHex("#EBF5FB")
-	ThemeSummaryBG  = MustHex("#A9CCE3")
-	ThemeBuy        = MustHex("#27AE60")
-	ThemeSell       = MustHex("#E74C3C")
-	ThemeLink       = MustHex("#2E86C1")
+	ThemeHeaderBG   RGB
+	ThemeHeaderFG   RGB
+	ThemeHeaderSub  RGB
+	ThemeSectionBG  RGB
+	ThemeSectionFG  RGB
+	ThemeTableHead  RGB
+	ThemeAltRow     RGB
+	ThemeInfoRow    RGB
+	ThemeSummaryBG  RGB
+	ThemeBuy        RGB
+	ThemeSell       RGB
+	ThemeLink       RGB
 	ThemeBlack      = RGB{0, 0, 0}
 	ThemeWhite      = RGB{1, 1, 1}
 )
+
+func init() {
+	ThemeHeaderBG, _ = MustHex("#154360")
+	ThemeHeaderFG, _ = MustHex("#FFFFFF")
+	ThemeHeaderSub, _ = MustHex("#AED6F1")
+	ThemeSectionBG, _ = MustHex("#21618C")
+	ThemeSectionFG, _ = MustHex("#FFFFFF")
+	ThemeTableHead, _ = MustHex("#D4E6F1")
+	ThemeAltRow, _ = MustHex("#F8F9F9")
+	ThemeInfoRow, _ = MustHex("#EBF5FB")
+	ThemeSummaryBG, _ = MustHex("#A9CCE3")
+	ThemeBuy, _ = MustHex("#27AE60")
+	ThemeSell, _ = MustHex("#E74C3C")
+	ThemeLink, _ = MustHex("#2E86C1")
+}

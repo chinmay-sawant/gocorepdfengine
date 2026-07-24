@@ -1,3 +1,5 @@
+// Package image provides image loading, caching, and PDF XObject generation
+// for JPEG and PNG formats.
 package image
 
 import (
@@ -8,9 +10,53 @@ import (
 	"fmt"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"sync"
 )
 
+const maxCacheEntries = 200
+
+var (
+	cache      map[string]*Image
+	cacheMu    sync.Mutex
+	cacheOnce  sync.Once
+	cacheOrder []string
+)
+
+func initCache() {
+	cacheOnce.Do(func() {
+		cache = make(map[string]*Image)
+		cacheOrder = make([]string, 0, maxCacheEntries)
+	})
+}
+
+func cacheSet(key string, img *Image) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	if _, exists := cache[key]; !exists {
+		if len(cache) >= maxCacheEntries {
+			oldest := cacheOrder[0]
+			delete(cache, oldest)
+			cacheOrder = cacheOrder[1:]
+		}
+		cacheOrder = append(cacheOrder, key)
+	}
+	cache[key] = img
+}
+
+func cacheGet(key string) (*Image, bool) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	img, ok := cache[key]
+	return img, ok
+}
+
+func cacheKey(data []byte) string {
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("%x", h[:8]) // cold path (one-time per image)
+}
+
+// Image represents a loaded image ready for PDF embedding.
 type Image struct {
 	Width, Height      int
 	ColorSpace         string
@@ -19,23 +65,18 @@ type Image struct {
 	Filter             string
 }
 
-var (
-	cache   map[string]*Image
-	cacheMu sync.Mutex
-	cacheOnce sync.Once
-)
-
-func initCache() {
-	cacheOnce.Do(func() {
-		cache = make(map[string]*Image)
-	})
+func checkOverflow(w, h int) error {
+	if w <= 0 || h <= 0 {
+		return errors.New("image: invalid image dimensions")
+	}
+	if w > math.MaxInt/h {
+		return errors.New("image: image dimensions too large")
+	}
+	return nil
 }
 
-func cacheKey(data []byte) string {
-	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h[:8])
-}
-
+// NewFromJPEG parses JPEG headers to extract width, height, color space, and
+// bits-per-component without fully decoding the image. Returns a cached Image.
 func NewFromJPEG(data []byte) (*Image, error) {
 	if len(data) < 2 || data[0] != 0xFF || data[1] != 0xD8 {
 		return nil, errors.New("image: invalid JPEG: missing SOI marker")
@@ -43,12 +84,9 @@ func NewFromJPEG(data []byte) (*Image, error) {
 
 	initCache()
 	key := cacheKey(data)
-	cacheMu.Lock()
-	if cached, ok := cache[key]; ok {
-		cacheMu.Unlock()
+	if cached, ok := cacheGet(key); ok {
 		return cached, nil
 	}
-	cacheMu.Unlock()
 
 	i := 2
 	for i < len(data) {
@@ -94,9 +132,7 @@ func NewFromJPEG(data []byte) (*Image, error) {
 				Data:             data,
 				Filter:           "/DCTDecode",
 			}
-			cacheMu.Lock()
-			cache[key] = img
-			cacheMu.Unlock()
+			cacheSet(key, img)
 			return img, nil
 		}
 
@@ -122,15 +158,15 @@ func NewFromJPEG(data []byte) (*Image, error) {
 	return nil, errors.New("image: JPEG SOF marker not found")
 }
 
+// NewFromPNG decodes a PNG image using the standard library, then converts it
+// to a JPEG (large images) or zlib-compressed RGB (small images) for PDF.
+// Results are cached by content hash.
 func NewFromPNG(data []byte) (*Image, error) {
 	initCache()
 	key := cacheKey(data)
-	cacheMu.Lock()
-	if cached, ok := cache[key]; ok {
-		cacheMu.Unlock()
+	if cached, ok := cacheGet(key); ok {
 		return cached, nil
 	}
-	cacheMu.Unlock()
 
 	src, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -141,8 +177,11 @@ func NewFromPNG(data []byte) (*Image, error) {
 	w := bounds.Dx()
 	h := bounds.Dy()
 
-	// For large images, use JPEG encoding which GS handles reliably.
-	const jpegThreshold = 100 * 100 // 100x100 pixels
+	if err := checkOverflow(w, h); err != nil {
+		return nil, err
+	}
+
+	const jpegThreshold = 100 * 100
 	var img *Image
 	if w*h >= jpegThreshold {
 		var jpgBuf bytes.Buffer
@@ -158,7 +197,11 @@ func NewFromPNG(data []byte) (*Image, error) {
 			Filter:           "/DCTDecode",
 		}
 	} else {
-		rawRGB := make([]byte, 0, w*h*3)
+		totalPixels := w * h
+		if totalPixels > math.MaxInt/3 {
+			return nil, errors.New("image: image too large for RGB buffer")
+		}
+		rawRGB := make([]byte, 0, totalPixels*3)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				r, g, b, _ := src.At(x, y).RGBA()
@@ -182,13 +225,13 @@ func NewFromPNG(data []byte) (*Image, error) {
 			Filter:           "/FlateDecode",
 		}
 	}
-	cacheMu.Lock()
-	cache[key] = img
-	cacheMu.Unlock()
+	cacheSet(key, img)
 	return img, nil
 }
 
-func (img *Image) XObjectDict(name, colorSpaceRef string) map[string]interface{} {
+// XObjectDict returns a PDF dictionary for placing this Image as an XObject.
+// The colorSpaceRef parameter should be a PDF color space reference string.
+func (img *Image) XObjectDict(_ string, colorSpaceRef string) map[string]interface{} {
 	return map[string]interface{}{
 		"/Type":             "/XObject",
 		"/Subtype":          "/Image",

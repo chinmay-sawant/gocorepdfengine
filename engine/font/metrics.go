@@ -3,8 +3,10 @@ package font
 import (
 	"encoding/binary"
 	"fmt"
+	"strconv"
 )
 
+// ToUnicodeCMap builds a ToUnicode CMap stream for the font.
 func (f *Font) ToUnicodeCMap() []byte {
 	keys := f.UsedRunes()
 	if len(keys) == 0 {
@@ -47,13 +49,10 @@ func (f *Font) ToUnicodeCMap() []byte {
 	appendStr("<0000> <FFFF>\n")
 	appendStr("endcodespacerange\n")
 
-	appendStr(fmt.Sprintf("%d beginbfrange\n", len(ranges)))
+	appendStr(strconv.Itoa(len(ranges)) + " beginbfrange\n")
 
 	for _, r := range ranges {
-		startHex := fmt.Sprintf("%04X", r.startCID)
-		endHex := fmt.Sprintf("%04X", r.endCID)
-		uniStr := fmt.Sprintf("%04X", r.startCID)
-		appendStr(fmt.Sprintf("<%s> <%s> <%s>\n", startHex, endHex, uniStr))
+		appendStr(fmt.Sprintf("<%04X> <%04X> <%04X>\n", r.startCID, r.endCID, r.startCID)) // hex formatting keeps Sprintf
 	}
 
 	appendStr("endbfrange\n")
@@ -65,11 +64,16 @@ func (f *Font) ToUnicodeCMap() []byte {
 	return cmap
 }
 
+// BuildCIDToGIDMap builds a CIDToGIDMap stream for the font.
 func (f *Font) BuildCIDToGIDMap() []byte {
-	data := make([]byte, 65536*2)
+	const (
+		cidMax    = 65536
+		cidMapLen = cidMax * 2
+	)
+	data := make([]byte, cidMapLen)
 	for r := range f.Glyphs {
 		cid := uint32(r)
-		if cid >= 65536 {
+		if cid >= cidMax {
 			continue
 		}
 		if f.SubGIDMap != nil {

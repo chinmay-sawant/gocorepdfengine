@@ -1,9 +1,11 @@
+// Package engine provides PDF document generation with support for PDF 2.0,
+// PDF/A-4, and PDF/UA-2.
 package engine
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/chinmay/gocorepdfengine/engine/color"
 	"github.com/chinmay/gocorepdfengine/engine/content"
@@ -40,7 +42,7 @@ type DocumentConfig struct {
 	FooterText    string
 }
 
-// GenerateDocument assembles a multi-page PDF 2.0 document, optionally PDF/A-4 + PDF/UA-2.
+//nolint:gocyclo
 func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	if cfg.Width == 0 {
 		cfg.Width = 595
@@ -146,51 +148,51 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	catalogID := d.AllocID()
 
 	// === Content streams ===
+	totalPages := len(cfg.Pages)
+	totalPagesStr := strconv.Itoa(totalPages)
+	footerX := strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64)
+	footerY := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
 	for i, pc := range cfg.Pages {
 		streamBytes := pc.Stream
 		// Wrap main content in BDC/EMC for PDF/UA-2 when tagged.
 		if isUA {
 			streamBytes = append([]byte("/P <</MCID 0>> BDC\n"), streamBytes...)
 		}
-		if cfg.FooterText != "" || len(cfg.Pages) > 1 {
-			var sb strings.Builder
+		if cfg.FooterText != "" || totalPages > 1 {
+			var buf bytes.Buffer
 			pageNum := i + 1
-			totalPages := len(cfg.Pages)
 			if isUA {
-				sb.WriteString("/Artifact BMC\n")
+				buf.WriteString("/Artifact BMC\n")
 			}
 
 			if cfg.FooterText != "" {
-				sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
-				sb.WriteString(strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64))
-				sb.WriteString(" ")
-				sb.WriteString(strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64))
-				sb.WriteString(" Td <")
+				buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
+				buf.WriteString(footerX)
+				buf.WriteString(" ")
+				buf.WriteString(footerY)
+				buf.WriteString(" Td <")
 				for _, r := range cfg.FooterText {
-					sb.WriteString(fmt.Sprintf("%04X", r))
+					fmt.Fprintf(&buf, "%04X", r)
 				}
-				sb.WriteString("> Tj ET\n")
+				buf.WriteString("> Tj ET\n")
 			}
 
-			pageStr := fmt.Sprintf("Page %d of %d", pageNum, totalPages)
-			sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
+			pageStr := "Page " + strconv.Itoa(pageNum) + " of " + totalPagesStr
+			buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
 			pageW := float64(len(pageStr)) * 8 * 0.55
-			rx := strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', -1, 64)
-			ry := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
-			sb.WriteString(rx)
-			sb.WriteString(" ")
-			sb.WriteString(ry)
-			sb.WriteString(" Td <")
+			buf.WriteString(strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', 6, 64))
+			buf.WriteString(" ")
+			buf.WriteString(footerY)
+			buf.WriteString(" Td <")
 			for _, r := range pageStr {
-				sb.WriteString(fmt.Sprintf("%04X", r))
+				fmt.Fprintf(&buf, "%04X", r)
 			}
-			sb.WriteString("> Tj ET\n")
+			buf.WriteString("> Tj ET\n")
 			if isUA {
-				sb.WriteString("EMC\n") // close Artifact BMC
+				buf.WriteString("EMC\n")
 			}
 
-			streamBytes = append([]byte{}, streamBytes...)
-			streamBytes = append(streamBytes, []byte(sb.String())...)
+			streamBytes = append(append([]byte{}, streamBytes...), buf.Bytes()...)
 		}
 		if isUA {
 			// Attach page content (non-artifact) EMC to end of stream.
@@ -241,9 +243,9 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				Dict: map[string]interface{}{"/Length": len(compressedMap), "/Filter": "/FlateDecode"},
 				Data: compressedMap,
 			})
-			d.AddObjectAt(shared.descriptorID, font.FontDescriptorDict(loadedFont, shared.fontFile2ID))
+			d.AddObjectAt(shared.descriptorID, font.DescriptorDict(loadedFont, shared.fontFile2ID))
 			d.AddObjectAt(shared.cidFontID, font.CIDFontDict(loadedFont, shared.descriptorID, shared.cidToGIDMapID))
-			d.AddObjectAt(shared.fontRef, font.FontDict(libName, shared.cidFontID, shared.toUnicodeID))
+			d.AddObjectAt(shared.fontRef, font.Dict(libName, shared.cidFontID, shared.toUnicodeID))
 		} else {
 			// Minimal fallback chain
 			fake := &font.Font{
@@ -254,9 +256,9 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			d.AddObjectAt(shared.fontFile2ID, &write.Stream{Dict: map[string]interface{}{"/Length": 0}, Data: []byte{}})
 			tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
 			d.AddObjectAt(shared.toUnicodeID, &write.Stream{Dict: map[string]interface{}{"/Length": len(tuData)}, Data: tuData})
-			d.AddObjectAt(shared.descriptorID, font.FontDescriptorDict(fake, shared.fontFile2ID))
+			d.AddObjectAt(shared.descriptorID, font.DescriptorDict(fake, shared.fontFile2ID))
 			d.AddObjectAt(shared.cidFontID, font.CIDFontDict(fake, shared.descriptorID, 0))
-			d.AddObjectAt(shared.fontRef, font.FontDict(fake.Name, shared.cidFontID, shared.toUnicodeID))
+			d.AddObjectAt(shared.fontRef, font.Dict(fake.Name, shared.cidFontID, shared.toUnicodeID))
 		}
 	} else {
 		d.AddObjectAt(shared.fontRef, map[string]interface{}{
@@ -350,7 +352,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		ptMap := make(map[int][]doc.ObjectID, len(cfg.Pages))
 		for i := range cfg.Pages {
 			pElem := &structure.StructElem{
-				Type:    structure.S_P,
+				Type:    structure.TypeP,
 				Parent:  elemDocID,
 				PageRef: pageIDs[i],
 				MCID:    0,
@@ -360,7 +362,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			ptMap[i] = []doc.ObjectID{elemPageIDs[i]}
 		}
 		docElem := &structure.StructElem{
-			Type:         structure.S_Document,
+			Type:         structure.TypeDocument,
 			ObjectID:     elemDocID,
 			Parent:       strRootRef,
 			NamespaceRef: nsRef,

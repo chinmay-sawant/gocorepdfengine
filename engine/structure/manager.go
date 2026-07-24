@@ -2,6 +2,9 @@ package structure
 
 import "github.com/chinmay/gocorepdfengine/engine/doc"
 
+// Manager coordinates the lifecycle of structure elements: allocation of
+// marked-content identifiers, element creation, and final assembly of the
+// structure tree dictionaries.
 type Manager struct {
 	Enabled     bool
 	Elements    []*StructElem
@@ -13,6 +16,8 @@ type Manager struct {
 	Root        *StructElem
 }
 
+// NewManager creates a Manager. When enabled is false, all methods return
+// zero values (producing no structure output).
 func NewManager(enabled bool, allocID func() doc.ObjectID) *Manager {
 	return &Manager{
 		Enabled:    enabled,
@@ -23,6 +28,7 @@ func NewManager(enabled bool, allocID func() doc.ObjectID) *Manager {
 	}
 }
 
+// AllocMCID returns the next marked-content identifier for the given page.
 func (m *Manager) AllocMCID(pageIndex int) int {
 	if !m.Enabled {
 		return 0
@@ -32,6 +38,8 @@ func (m *Manager) AllocMCID(pageIndex int) int {
 	return mcid
 }
 
+// AddElement assigns a new object ID to the element and appends it to the
+// element list. Returns the assigned ID.
 func (m *Manager) AddElement(elem *StructElem) doc.ObjectID {
 	if !m.Enabled {
 		return 0
@@ -42,12 +50,13 @@ func (m *Manager) AddElement(elem *StructElem) doc.ObjectID {
 	return id
 }
 
+// SetDocumentRoot creates the root /Document element and registers it.
 func (m *Manager) SetDocumentRoot() {
 	if !m.Enabled {
 		return
 	}
 	elem := &StructElem{
-		Type:   S_Document,
+		Type:   TypeDocument,
 		Parent: 0,
 		MCID:   -1,
 	}
@@ -55,6 +64,9 @@ func (m *Manager) SetDocumentRoot() {
 	m.Root = elem
 }
 
+// Build assembles and returns all structure tree dictionaries (namespace,
+// root, parent tree) and their object references. Returns nil values when
+// the manager is disabled.
 func (m *Manager) Build() (namespaceDict map[string]interface{},
 	rootDict map[string]interface{},
 	parentTreeDict map[string]interface{},

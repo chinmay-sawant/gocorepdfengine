@@ -162,11 +162,12 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 	if n.ModeLabel == "retail" && len(n.Trades) > 0 && count <= len(n.Trades) {
 		return
 	}
-	rng := rand.New(rand.NewSource(seed))
+	rng := rand.New(rand.NewSource(seed)) // Deterministic seed for benchmark reproducibility (not security-sensitive).
 	trades := make([]Trade, count)
-	hour, min, sec := 9, 15, 0
+	hour, mn, sec := 9, 15, 0
+	symCount := len(symbols)
 	for i := 0; i < count; i++ {
-		sym := symbols[rng.Intn(len(symbols))]
+		sym := symbols[rng.Intn(symCount)]
 		action := "BUY"
 		if rng.Intn(2) == 1 {
 			action = "SELL"
@@ -176,14 +177,14 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 		price = float64(int(price*100)) / 100
 		total := float64(qty) * price
 
-		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, min, sec)
+		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec) // zero-padded, keeps Sprintf
 		sec++
 		if sec >= 60 {
 			sec = 0
-			min++
+			mn++
 		}
-		if min >= 60 {
-			min = 0
+		if mn >= 60 {
+			mn = 0
 			hour++
 		}
 

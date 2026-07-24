@@ -35,10 +35,12 @@ type Glyph struct {
 	BBox  [4]int16
 }
 
+// GlyphCount returns the number of glyphs in the font.
 func (f *Font) GlyphCount() int {
 	return len(f.Glyphs)
 }
 
+// CharWidth returns the width of the given rune at the given scale factor.
 func (f *Font) CharWidth(r rune, scale float64) float64 {
 	g, ok := f.Glyphs[r]
 	if !ok {
@@ -50,6 +52,7 @@ func (f *Font) CharWidth(r rune, scale float64) float64 {
 	return float64(g.Width) * scale / float64(f.UnitsPerEm)
 }
 
+// Widths returns the widths of all glyphs, scaled to a 1000-unit EM.
 func (f *Font) Widths() []int {
 	if f.UnitsPerEm == 0 {
 		return nil
@@ -72,6 +75,7 @@ func (f *Font) Widths() []int {
 	return widths
 }
 
+// DefaultWidth returns the default glyph width (1000 EM-units).
 func (f *Font) DefaultWidth() int {
 	if f.UnitsPerEm == 0 || len(f.RawData) < 12 {
 		return 1000
@@ -86,6 +90,7 @@ func (f *Font) DefaultWidth() int {
 	return 1000
 }
 
+// UsedRunes returns all runes that have been added to the font, sorted in ascending order.
 func (f *Font) UsedRunes() []rune {
 	keys := make([]rune, 0, len(f.Glyphs))
 	for r := range f.Glyphs {

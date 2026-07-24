@@ -2,23 +2,34 @@ package color
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/zlib"
 	"encoding/binary"
+	"fmt"
+	"io"
 	"os"
+	"sync"
 	"time"
 )
 
 var (
+	srgbOnce sync.Once
+	grayOnce sync.Once
 	srgbData []byte
 	grayData []byte
 )
 
-func init() {
-	srgbData = loadOrBuildProfile("/usr/share/color/icc/ghostscript/scrgb.icc", buildSRGB)
-	grayData = loadOrBuildProfile("/usr/share/color/icc/ghostscript/sgray.icc", buildGray)
+var zlibWriterPool = sync.Pool{
+	New: func() interface{} {
+		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
+		if err != nil {
+			panic(err)
+		}
+		return w
+	},
 }
 
-func loadOrBuildProfile(path string, build func() []byte) []byte {
+func loadOrBuildProfile(path string, build func() []byte) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err == nil && len(data) > 0 {
 		return compress(data)
@@ -26,14 +37,34 @@ func loadOrBuildProfile(path string, build func() []byte) []byte {
 	return compress(build())
 }
 
+// SRGBProfile returns the compressed sRGB ICC profile data.
 func SRGBProfile() []byte {
+	srgbOnce.Do(func() {
+		var err error
+		srgbData, err = loadOrBuildProfile("/usr/share/color/icc/ghostscript/scrgb.icc", buildSRGB)
+		if err != nil {
+			srgbData = nil
+		}
+	})
 	return srgbData
 }
 
+var _ = buildSRGB
+var _ = buildGray
+
+// GrayProfile returns the compressed gray ICC profile data.
 func GrayProfile() []byte {
+	grayOnce.Do(func() {
+		var err error
+		grayData, err = loadOrBuildProfile("/usr/share/color/icc/ghostscript/sgray.icc", buildGray)
+		if err != nil {
+			grayData = nil
+		}
+	})
 	return grayData
 }
 
+// SRGBProfileDict returns the PDF stream dictionary for the sRGB ICC profile.
 func SRGBProfileDict() map[string]interface{} {
 	return map[string]interface{}{
 		"/N":         3,
@@ -43,6 +74,7 @@ func SRGBProfileDict() map[string]interface{} {
 	}
 }
 
+// GrayProfileDict returns the PDF stream dictionary for the gray ICC profile.
 func GrayProfileDict() map[string]interface{} {
 	return map[string]interface{}{
 		"/N":         1,
@@ -61,7 +93,7 @@ func align4(n int) int {
 }
 
 type iccTag struct {
-	sig string
+	sig  string
 	data []byte
 }
 
@@ -102,12 +134,18 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 	hdr := buildHeader(size, deviceClass, colorSpace, pcs)
 	buf := bytes.NewBuffer(hdr)
 
-	binary.Write(buf, binary.BigEndian, uint32(len(tags)))
+	buf.Write([]byte{
+		byte(len(tags) >> 24), byte(len(tags) >> 16), byte(len(tags) >> 8), byte(len(tags)),
+	})
 	offset := uint32(dataStart)
 	for _, t := range tags {
-		binary.Write(buf, binary.BigEndian, [4]byte{t.sig[0], t.sig[1], t.sig[2], t.sig[3]})
-		binary.Write(buf, binary.BigEndian, offset)
-		binary.Write(buf, binary.BigEndian, uint32(len(t.data)))
+		buf.Write([]byte{t.sig[0], t.sig[1], t.sig[2], t.sig[3]})
+		buf.Write([]byte{
+			byte(offset >> 24), byte(offset >> 16), byte(offset >> 8), byte(offset),
+		})
+		buf.Write([]byte{
+			byte(len(t.data) >> 24), byte(len(t.data) >> 16), byte(len(t.data) >> 8), byte(len(t.data)),
+		})
 		offset += uint32(align4(len(t.data)))
 	}
 	for _, t := range tags {
@@ -121,33 +159,34 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 
 func buildDesc(text string) []byte {
 	var buf bytes.Buffer
+	buf.Grow(20 + len(text))
 	buf.Write([]byte("desc"))
-	binary.Write(&buf, binary.BigEndian, uint32(0))
+	binary.Write(&buf, binary.BigEndian, uint32(0))   //nolint: errcheck
 	asciiCount := uint32(len(text) + 1)
-	binary.Write(&buf, binary.BigEndian, asciiCount)
+	binary.Write(&buf, binary.BigEndian, asciiCount)  //nolint: errcheck
 	buf.WriteString(text)
 	buf.WriteByte(0)
-	binary.Write(&buf, binary.BigEndian, uint32(0))
-	binary.Write(&buf, binary.BigEndian, uint16(0))
+	binary.Write(&buf, binary.BigEndian, uint32(0))   //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint16(0))  //nolint: errcheck
 	return buf.Bytes()
 }
 
 func buildXYZ(x, y, z float64) []byte {
 	var buf bytes.Buffer
 	buf.Write([]byte("XYZ "))
-	binary.Write(&buf, binary.BigEndian, uint32(0))
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(x))
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(y))
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(z))
+	binary.Write(&buf, binary.BigEndian, uint32(0))         //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, s15Fixed16(x))     //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, s15Fixed16(y))     //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, s15Fixed16(z))     //nolint: errcheck
 	return buf.Bytes()
 }
 
 func buildCurve(gamma float64) []byte {
 	var buf bytes.Buffer
 	buf.Write([]byte("curv"))
-	binary.Write(&buf, binary.BigEndian, uint32(0))
-	binary.Write(&buf, binary.BigEndian, uint32(1))
-	binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))
+	binary.Write(&buf, binary.BigEndian, uint32(0))                //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint32(1))                //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))  //nolint: errcheck
 	return buf.Bytes()
 }
 
@@ -176,10 +215,18 @@ func buildGray() []byte {
 		})
 }
 
-func compress(data []byte) []byte {
+func compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	w := zlib.NewWriter(&buf)
-	w.Write(data)
-	w.Close()
-	return buf.Bytes()
+	w := zlibWriterPool.Get().(*zlib.Writer)
+	defer zlibWriterPool.Put(w)
+	w.Reset(&buf)
+	_, err := w.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("compress write: %w", err)
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, fmt.Errorf("compress close: %w", err)
+	}
+	return buf.Bytes(), nil
 }

@@ -18,7 +18,7 @@ import (
 func compressData(data []byte) []byte {
 	var buf bytes.Buffer
 	w := zlib.NewWriter(&buf)
-	w.Write(data)
+	w.Write(data) //nolint: errcheck
 	w.Close()
 	return buf.Bytes()
 }
@@ -41,6 +41,7 @@ type Result struct {
 	Data []byte
 }
 
+//nolint:gocyclo
 func Generate(config Config) (Result, error) {
 	d := doc.NewDocument()
 	if config.Mode != 0 {
@@ -189,9 +190,9 @@ func Generate(config Config) (Result, error) {
 			})
 
 			// Use font emit functions
-			d.AddObjectAt(descriptorID, font.FontDescriptorDict(loadedFont, fontFile2ID))
+			d.AddObjectAt(descriptorID, font.DescriptorDict(loadedFont, fontFile2ID))
 			d.AddObjectAt(cidFontID, font.CIDFontDict(loadedFont, descriptorID, cidToGIDMapID))
-			d.AddObjectAt(fontRef, font.FontDict(libName, cidFontID, toUnicodeID))
+			d.AddObjectAt(fontRef, font.Dict(libName, cidFontID, toUnicodeID))
 		} else {
 			// Fallback: hardcoded minimal font chain
 			libName := "LiberationSans-Regular"
@@ -214,9 +215,9 @@ func Generate(config Config) (Result, error) {
 			})
 			tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
 			d.AddObjectAt(toUnicodeID, &write.Stream{Dict: map[string]interface{}{"/Length": len(tuData)}, Data: tuData})
-			d.AddObjectAt(descriptorID, font.FontDescriptorDict(fakeFont, fontFile2ID))
+			d.AddObjectAt(descriptorID, font.DescriptorDict(fakeFont, fontFile2ID))
 			d.AddObjectAt(cidFontID, font.CIDFontDict(fakeFont, descriptorID, 0))
-			d.AddObjectAt(fontRef, font.FontDict(libName, cidFontID, toUnicodeID))
+			d.AddObjectAt(fontRef, font.Dict(libName, cidFontID, toUnicodeID))
 		}
 	} else {
 		d.AddObjectAt(fontRef, map[string]interface{}{
@@ -287,7 +288,7 @@ func Generate(config Config) (Result, error) {
 		d.AddObjectAt(nsRef, nsDict)
 
 		pElem := &structure.StructElem{
-			Type:     structure.S_P,
+			Type:     structure.TypeP,
 			Parent:   elemDocID,
 			PageRef:  pageID,
 			MCID:     0,
@@ -295,7 +296,7 @@ func Generate(config Config) (Result, error) {
 		pElemID := d.AllocID()
 
 		docElem := &structure.StructElem{
-			Type:         structure.S_Document,
+			Type:         structure.TypeDocument,
 			ObjectID:     elemDocID,
 			Parent:       strRootRef,
 			NamespaceRef: nsRef,

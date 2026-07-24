@@ -26,44 +26,50 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/render"
 )
 
-var (
-	flagCPUProfile = flag.String("cpuprofile", "", "write CPU profile to file")
-	flagMemProfile = flag.String("memprofile", "", "write heap profile to file")
-)
+	var (
+		flagCPUProfile = flag.String("cpuprofile", "", "write CPU profile to file")
+		flagMemProfile = flag.String("memprofile", "", "write heap profile to file")
+	)
 
-// set by main.go / main_nocomply.go
-var benchCompliant bool
+	// set by main.go / main_nocomply.go
+	var benchCompliant bool
 
 func runMain() {
 	flag.Parse()
+	var cpuProfileFile *os.File
 	if *flagCPUProfile != "" {
-		f, err := os.Create(*flagCPUProfile)
+		var err error
+		cpuProfileFile, err = os.Create(*flagCPUProfile)
 		if err != nil {
 			fmt.Println(err)
-			os.Exit(1)
+			os.Exit(1) // Benchmark harness, not library code.
 		}
-		if err := pprof.StartCPUProfile(f); err != nil {
-			_ = f.Close()
+		if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
+			_ = cpuProfileFile.Close() // Best-effort cleanup; original error is surfaced below.
 			fmt.Println(err)
-			os.Exit(1)
+			os.Exit(1) // Benchmark harness, not library code.
 		}
-		defer func() {
-			pprof.StopCPUProfile()
-			_ = f.Close()
-		}()
 	}
 	if err := runBenchmark(); err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		if cpuProfileFile != nil {
+			pprof.StopCPUProfile()
+			cpuProfileFile.Close()
+		}
+		os.Exit(1) // Benchmark harness, not library code.
+	}
+	if cpuProfileFile != nil {
+		pprof.StopCPUProfile()
+		cpuProfileFile.Close()
 	}
 	if *flagMemProfile != "" {
 		f, err := os.Create(*flagMemProfile)
 		if err != nil {
 			fmt.Println(err)
-			os.Exit(1)
+			os.Exit(1) // Benchmark harness, not library code.
 		}
-		defer func() { _ = f.Close() }()
-		_ = pprof.WriteHeapProfile(f)
+		defer f.Close() // Best-effort cleanup after heap profile write.
+		_ = pprof.WriteHeapProfile(f) // Diagnostic — error discarded intentionally.
 	}
 }
 
@@ -138,6 +144,7 @@ func monitorMemory(done chan bool, wg *sync.WaitGroup) {
 	}
 }
 
+//nolint:gocyclo
 func runBenchmark() error {
 	fmt.Println("=== Zerodha Gold Standard Benchmark (gocorepdfengine) ===")
 	fmt.Println("Pipeline: JSON → model → layout (colors) → GenerateDocument")
@@ -158,13 +165,14 @@ func runBenchmark() error {
 	iterations := envInt("BENCH_ITERATIONS", 5000)
 	numWorkers := envInt("BENCH_WORKERS", 48)
 	skipWrite := os.Getenv("BENCH_SKIP_WRITE") == "1"
-	benchSeed := int64(42)
+	benchSeed := int64(42) // Fixed seed for deterministic benchmark reproducibility (not security-sensitive).
 	if raw := os.Getenv("BENCH_SEED"); raw != "" {
 		if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
 			benchSeed = n
 		}
 	}
 
+	// Diagnostic output for benchmarking context — exposes OS/arch/Go version intentionally.
 	fmt.Printf("OS: %s, Arch: %s, NumCPU: %d, Go: %s\n",
 		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version())
 	fmt.Printf("GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
@@ -172,7 +180,7 @@ func runBenchmark() error {
 
 	baseRetail, baseActive, baseHFT, err := loadBaseNotes()
 	if err != nil {
-		return err
+		return fmt.Errorf("loading base notes: %w", err)
 	}
 
 	// Cached models (expanded once).

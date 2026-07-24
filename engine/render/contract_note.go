@@ -22,7 +22,11 @@ const (
 	marginR = 36.0
 	marginT = 40.0
 	marginB = 40.0
-	font    = "Helvetica"
+)
+
+const (
+	font      = "Helvetica"
+	actionSell = "SELL"
 )
 
 // Options controls compliance mode for rendering.
@@ -153,6 +157,11 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{2, 1.5, 1, 1, 1.5, 1.5}
 	tl := &layout.TableLayout{ColWidths: cols}
 
+	cell9 := layout.CellStyleFromColors(font, 9, color.ThemeBlack, nil, 3)
+	cell9.Border = layout.DefaultBorder()
+	cell8 := layout.CellStyleFromColors(font, 8, color.ThemeBlack, nil, 3)
+	cell8.Border = layout.DefaultBorder()
+
 	bgH := color.ThemeHeaderBG
 	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
@@ -163,7 +172,7 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("CN2024001 | %s", dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(fmt.Sprintf("CN2024001 | %s", dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45), // cold path
 		},
 	})
 
@@ -203,18 +212,28 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
+		cs9 := cell9
+		cs8 := cell8
+		if bg != nil {
+			b := [3]float64(*bg)
+			cs9.FillColor = &b
+			b8 := [3]float64(*bg)
+			cs8.FillColor = &b8
+		}
+		ca9 := cs9
+		ca9.TextColor = [3]float64(afg)
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 14,
 			Cells: []layout.Cell{
-				layout.StyledCell(t.Symbol, font, 9, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(t.ISIN, font, 8, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(t.Action, font, 9, afg, bg, 0, 14),
-				layout.StyledCell(strconv.Itoa(t.Qty), font, 9, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(model.Money(t.Price), font, 9, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(model.Money(t.Total), font, 9, color.ThemeBlack, bg, 0, 14),
+				{Text: t.Symbol, Style: cs9, W: 0, H: 14},
+				{Text: t.ISIN, Style: cs8, W: 0, H: 14},
+				{Text: t.Action, Style: ca9, W: 0, H: 14},
+				{Text: strconv.Itoa(t.Qty), Style: cs9, W: 0, H: 14},
+				{Text: model.Money(t.Price), Style: cs9, W: 0, H: 14},
+				{Text: model.Money(t.Total), Style: cs9, W: 0, H: 14},
 			},
 		})
 	}
@@ -242,6 +261,9 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 func buildActive(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{3.5, 1, 1, 1.5, 1.5}
 	tl := &layout.TableLayout{ColWidths: cols}
+	cell8a := layout.CellStyleFromColors(font, 8, color.ThemeBlack, nil, 3)
+	cell8a.Border = layout.DefaultBorder()
+
 	bgH := color.ThemeHeaderBG
 	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
@@ -251,7 +273,7 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45), // cold path
 		},
 	})
 	sec := color.ThemeSectionBG
@@ -267,7 +289,7 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("", font, 9, color.ThemeBlack, &info, 0, 16),
 		},
 	})
-	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADE DETAILS (%d)", len(note.Trades)), 5, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADE DETAILS (%d)", len(note.Trades)), 5, sec, color.ThemeSectionFG, 18)) // cold path
 	th := color.ThemeTableHead
 	tl.Rows = append(tl.Rows, layout.Row{
 		Height: 16,
@@ -286,17 +308,24 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
+		cs := cell8a
+		if bg != nil {
+			b := [3]float64(*bg)
+			cs.FillColor = &b
+		}
+		ca := cs
+		ca.TextColor = [3]float64(afg)
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 12,
 			Cells: []layout.Cell{
-				layout.StyledCell(t.Symbol, font, 8, color.ThemeBlack, bg, 0, 12),
-				layout.StyledCell(t.Action, font, 8, afg, bg, 0, 12),
-				layout.StyledCell(strconv.Itoa(t.Qty), font, 8, color.ThemeBlack, bg, 0, 12),
-				layout.StyledCell(model.Money(t.Price), font, 8, color.ThemeBlack, bg, 0, 12),
-				layout.StyledCell(model.Money(t.Total), font, 8, color.ThemeBlack, bg, 0, 12),
+				{Text: t.Symbol, Style: cs, W: 0, H: 12},
+				{Text: t.Action, Style: ca, W: 0, H: 12},
+				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 12},
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: 12},
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: 12},
 			},
 		})
 	}
@@ -324,6 +353,9 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 func buildHFT(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{2, 1, 2, 0.8, 0.6, 2, 1}
 	tl := &layout.TableLayout{ColWidths: cols}
+	cell7h := layout.CellStyleFromColors(font, 7, color.ThemeBlack, nil, 3)
+	cell7h.Border = layout.DefaultBorder()
+
 	bgH := color.ThemeHeaderBG
 	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
@@ -335,9 +367,10 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell(note.Client.Name, font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45), // cold path
 		},
 	})
+
 	sec := color.ThemeSectionBG
 	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", 7, sec, color.ThemeSectionFG, 16))
 	info := color.ThemeInfoRow
@@ -353,7 +386,7 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("BATCH", font, 8, color.ThemeBlack, &info, 0, 14),
 		},
 	})
-	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADES (%d)", len(note.Trades)), 7, sec, color.ThemeSectionFG, 16))
+	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADES (%d)", len(note.Trades)), 7, sec, color.ThemeSectionFG, 16)) // cold path
 	th := color.ThemeTableHead
 	tl.Rows = append(tl.Rows, layout.Row{
 		Height: 14,
@@ -374,19 +407,26 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
+		cs := cell7h
+		if bg != nil {
+			b := [3]float64(*bg)
+			cs.FillColor = &b
+		}
+		ca := cs
+		ca.TextColor = [3]float64(afg)
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 10,
 			Cells: []layout.Cell{
-				layout.StyledCell(strconv.Itoa(t.ID), font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(t.Time, font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(t.Symbol, font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(t.Action, font, 7, afg, bg, 0, 10),
-				layout.StyledCell(strconv.Itoa(t.Qty), font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(model.Money(t.Price), font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(model.Money(t.Total), font, 7, color.ThemeBlack, bg, 0, 10),
+				{Text: strconv.Itoa(t.ID), Style: cs, W: 0, H: 10},
+				{Text: t.Time, Style: cs, W: 0, H: 10},
+				{Text: t.Symbol, Style: cs, W: 0, H: 10},
+				{Text: t.Action, Style: ca, W: 0, H: 10},
+				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 10},
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: 10},
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: 10},
 			},
 		})
 	}

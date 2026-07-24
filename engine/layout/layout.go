@@ -1,3 +1,6 @@
+// Package layout provides content-stream builders for positioning text, images,
+// rectangles, and watermarks on a PDF page. It also offers text-wrapping and
+// table-layout helpers used by higher-level rendering packages.
 package layout
 
 import (
@@ -8,14 +11,17 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/image"
 )
 
+// Point represents a 2D coordinate in PDF user-space units.
 type Point struct {
 	X, Y float64
 }
 
+// Rect represents a rectangle with lower-left corner (X, Y) and dimensions (W, H).
 type Rect struct {
 	X, Y, W, H float64
 }
 
+// TextRun holds all parameters needed to place a single line of text.
 type TextRun struct {
 	Text     string
 	FontName string
@@ -24,11 +30,14 @@ type TextRun struct {
 	X, Y     float64
 }
 
+// BorderStyle describes a single-side border.
 type BorderStyle struct {
 	Width float64
 	Color [3]float64
 }
 
+// ContentBuilder accumulates PDF content-stream operations and tracks
+// font / image / marked-content identifiers used during layout.
 type ContentBuilder struct {
 	Stream       *content.Stream
 	FontRes      map[string]string
@@ -38,11 +47,13 @@ type ContentBuilder struct {
 	Width, Height float64
 }
 
+// ImageObj pairs a decoded image with its raw bytes for embedding.
 type ImageObj struct {
 	Img   *image.Image
 	Data  []byte
 }
 
+// NewContentBuilder creates a ContentBuilder for a page of the given dimensions.
 func NewContentBuilder(width, height float64) *ContentBuilder {
 	return &ContentBuilder{
 		Stream:       content.NewStream(),
@@ -63,7 +74,14 @@ func textWidth(text string, fontSize float64) float64 {
 	return float64(len(text)) * fontSize * 0.52
 }
 
+func charScale(fontSize float64) float64 {
+	return fontSize * 0.52
+}
+
+// WrapText breaks text into lines that each fit within maxWidth at the given
+// font size. Words are preserved when possible; otherwise characters are broken.
 func WrapText(text string, fontSize, maxWidth float64) []string {
+	scale := charScale(fontSize)
 	if maxWidth <= 0 || textWidth(text, fontSize) <= maxWidth {
 		return []string{text}
 	}
@@ -77,7 +95,7 @@ func WrapText(text string, fontSize, maxWidth float64) []string {
 		}
 		// Find the longest initial segment that fits.
 		end := start + 1
-		for end <= len(runes) && textWidth(string(runes[start:end]), fontSize) <= maxWidth {
+		for end <= len(runes) && float64(end-start)*scale <= maxWidth {
 			end++
 		}
 		// If the whole remaining text fits, use it.
@@ -107,18 +125,22 @@ func WrapText(text string, fontSize, maxWidth float64) []string {
 	return lines
 }
 
+// PlaceText emits PDF content-stream operators to show a line of text.
 func (cb *ContentBuilder) PlaceText(run TextRun) {
 	if run.Text == "" {
 		return
 	}
 	label, ok := cb.FontRes[run.FontName]
 	if !ok {
-		label = fmt.Sprintf("F%d", len(cb.FontRes)+1)
+		label = "F" + strconv.Itoa(len(cb.FontRes)+1)
 		cb.FontRes[run.FontName] = label
 		cb.UsedFonts[run.FontName] = true
 	}
 
-	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg\n", fmtFloat(run.Color[0]), fmtFloat(run.Color[1]), fmtFloat(run.Color[2]))
+	r0 := fmtFloat(run.Color[0])
+	r1 := fmtFloat(run.Color[1])
+	r2 := fmtFloat(run.Color[2])
+	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg\n", r0, r1, r2)
 	cb.Stream.BT()
 	cb.Stream.Tf(label, run.FontSize)
 	cb.Stream.Td(run.X, run.Y)
@@ -126,24 +148,37 @@ func (cb *ContentBuilder) PlaceText(run TextRun) {
 	cb.Stream.ET()
 }
 
+// DrawRect fills and/or strokes a rectangle. Both fill and border are optional.
 func (cb *ContentBuilder) DrawRect(r Rect, fill *[3]float64, border *BorderStyle) {
+	rx := fmtFloat(r.X)
+	ry := fmtFloat(r.Y)
+	rw := fmtFloat(r.W)
+	rh := fmtFloat(r.H)
 	if fill != nil {
-		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg\n", fmtFloat(fill[0]), fmtFloat(fill[1]), fmtFloat(fill[2]))
-		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s re\n", fmtFloat(r.X), fmtFloat(r.Y), fmtFloat(r.W), fmtFloat(r.H))
+		f0 := fmtFloat(fill[0])
+		f1 := fmtFloat(fill[1])
+		f2 := fmtFloat(fill[2])
+		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg\n", f0, f1, f2)
+		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s re\n", rx, ry, rw, rh)
 		cb.Stream.Buf.WriteString("f\n")
 	}
 	if border != nil {
-		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s RG\n", fmtFloat(border.Color[0]), fmtFloat(border.Color[1]), fmtFloat(border.Color[2]))
-		fmt.Fprintf(&cb.Stream.Buf, "%s w\n", fmtFloat(border.Width))
-		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s re\n", fmtFloat(r.X), fmtFloat(r.Y), fmtFloat(r.W), fmtFloat(r.H))
+		b0 := fmtFloat(border.Color[0])
+		b1 := fmtFloat(border.Color[1])
+		b2 := fmtFloat(border.Color[2])
+		bw := fmtFloat(border.Width)
+		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s RG\n", b0, b1, b2)
+		fmt.Fprintf(&cb.Stream.Buf, "%s w\n", bw)
+		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s re\n", rx, ry, rw, rh)
 		cb.Stream.Buf.WriteString("S\n")
 	}
 }
 
+// PlaceWatermark adds a diagonal "DRAFT"-style watermark as a PDF Artifact.
 func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 	label, ok := cb.FontRes["Helvetica"]
 	if !ok {
-		label = fmt.Sprintf("F%d", len(cb.FontRes)+1)
+		label = "F" + strconv.Itoa(len(cb.FontRes)+1)
 		cb.FontRes["Helvetica"] = label
 		cb.UsedFonts["Helvetica"] = true
 	}
@@ -165,6 +200,8 @@ func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 	fmt.Fprintf(&cb.Stream.Buf, "EMC\n")
 }
 
+// PlaceImage adds a Do operator for an image XObject, scaling to fit w×h while
+// preserving the aspect ratio and centering within the given rectangle.
 func (cb *ContentBuilder) PlaceImage(img *image.Image, objName string, x, y, w, h float64) {
 	cb.ImageObjects[objName] = &ImageObj{Img: img, Data: img.Data}
 	// Preserve aspect ratio: scale to fit within w×h, then center.
@@ -183,6 +220,7 @@ func (cb *ContentBuilder) PlaceImage(img *image.Image, objName string, x, y, w, 
 	fmt.Fprintf(&cb.Stream.Buf, "Q\n")
 }
 
+// Bytes returns the accumulated PDF content-stream data.
 func (cb *ContentBuilder) Bytes() []byte {
 	return cb.Stream.Bytes()
 }

@@ -1,4 +1,4 @@
-// Command to generate a financial report PDF from the full-format JSON template.
+// Package main generates a financial report PDF from the full-format JSON template.
 //
 // Usage:
 //
@@ -18,7 +18,7 @@ import (
 
 func main() {
 	// Resolve JSON path relative to the project root.
-	pwd, _ := os.Getwd()
+	pwd, _ := os.Getwd() // Getwd error discarded — path is a best-effort fallback.
 	path := filepath.Join(pwd, "sampledata/financial/financial_report.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		path = filepath.Join(pwd, "financial_report.json")

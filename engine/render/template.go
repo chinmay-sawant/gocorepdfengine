@@ -13,7 +13,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
 
-func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
+func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 	pageW, pageH := pageDimensions(t.Config)
 	contentW := pageW - marginL - marginR
 
@@ -31,7 +31,7 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		if tbl == nil {
 			continue
 		}
-		var res layout.LayoutResult
+		var res layout.Result
 		var err error
 		if len(allBuilders) == 0 {
 			res, err = tbl.LayOut(marginL, marginT, pageW, pageH, cur)
@@ -186,6 +186,8 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 		}
 	}
 
+	b64cache := make(map[string][]byte)
+	hexCache := make(map[string]color.RGB)
 	for i, row := range td.Rows {
 		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {
@@ -205,29 +207,46 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 			p, _ := layout.ParseProps(c.Props)
 			var fill *color.RGB
 			if c.BGColor != "" {
-				parsed, err := color.ParseHex(c.BGColor)
-				if err == nil {
-					fill = &parsed
+				parsed, ok := hexCache[c.BGColor]
+				if !ok {
+					var err error
+					parsed, err = color.ParseHex(c.BGColor)
+					if err == nil {
+						hexCache[c.BGColor] = parsed
+					}
 				}
+				fill = &parsed
 			} else if defaultBG != nil {
 				fill = defaultBG
 			}
 			var tc [3]float64
 			if c.TextColor != "" {
-				parsed, err := color.ParseHex(c.TextColor)
-				if err == nil {
-					tc = [3]float64(parsed)
+				parsed, ok := hexCache[c.TextColor]
+				if !ok {
+					var err error
+					parsed, err = color.ParseHex(c.TextColor)
+					if err == nil {
+						hexCache[c.TextColor] = parsed
+					}
 				}
+				tc = [3]float64(parsed)
 			} else if defaultTC != [3]float64{} {
 				tc = defaultTC
 			}
 			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
 			if c.Image != nil && c.Image.ImageData != "" {
-				raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData)
-				if err == nil && len(raw) > 0 {
-					isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
-					lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
+				raw, ok := b64cache[c.Image.ImageData]
+				if !ok {
+					var err error
+					raw, err = base64.StdEncoding.DecodeString(c.Image.ImageData)
+					if err != nil || len(raw) == 0 {
+						r.Cells = append(r.Cells, lc)
+						continue
+					}
+					b64cache[c.Image.ImageData] = raw
 				}
+				isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
+				lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
 			}
 			r.Cells = append(r.Cells, lc)
 		}

@@ -94,6 +94,7 @@ func tableDir(data []byte) ([]tableDirEntry, error) {
 	return entries, nil
 }
 
+// LoadFromPath loads a TTF font from the given file path.
 func LoadFromPath(path string) (*Font, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -102,6 +103,7 @@ func LoadFromPath(path string) (*Font, error) {
 	return LoadFromBytes(data)
 }
 
+// LoadFromBytes loads a TTF font from raw byte data.
 func LoadFromBytes(data []byte) (*Font, error) {
 	if len(data) < 12 {
 		return nil, fmt.Errorf("font: data too short for TTF header")
@@ -114,7 +116,7 @@ func LoadFromBytes(data []byte) (*Font, error) {
 
 	f := &Font{
 		RawData:      data,
-		Glyphs:       make(map[rune]*Glyph),
+		Glyphs:       make(map[rune]*Glyph, 256),
 		cmap:         make(map[rune]uint16),
 		glyphMetrics: make(map[uint16]*Glyph),
 	}
@@ -153,7 +155,7 @@ func LoadFromBytes(data []byte) (*Font, error) {
 func parseHead(f *Font, data []byte) error {
 	tbl, err := findTable(data, "head")
 	if err != nil {
-		return err
+		return fmt.Errorf("font: parsing head table: %w", err)
 	}
 	if len(tbl) < 54 {
 		return fmt.Errorf("font: head table too short")
@@ -171,11 +173,7 @@ func parseHead(f *Font, data []byte) error {
 	f.FontBBox[1], off = readI16(tbl, off) // yMin
 	f.FontBBox[2], off = readI16(tbl, off) // xMax
 	f.FontBBox[3], off = readI16(tbl, off) // yMax
-	macStyle, off := readU16(tbl, off)
-	off += 2 // lowestRecPPEM
-	off += 2 // fontDirectionHint
-	off += 2 // indexToLocFormat
-	off += 2 // glyphDataFormat
+	macStyle, _ := readU16(tbl, off)
 
 	f.IsSerif = flags&0x02 != 0
 	f.IsMono = macStyle&0x04 != 0
@@ -185,27 +183,28 @@ func parseHead(f *Font, data []byte) error {
 func parseHHEA(f *Font, data []byte) error {
 	tbl, err := findTable(data, "hhea")
 	if err != nil {
-		return err
+		return fmt.Errorf("font: parsing hhea table: %w", err)
 	}
 	if len(tbl) < 36 {
 		return fmt.Errorf("font: hhea table too short")
 	}
-	off := uint32(0)
-	off += 4 // version
-	f.Ascent, off = readI16(tbl, off)
-	f.Descent, off = readI16(tbl, off)
+	f.Ascent, _ = readI16(tbl, 4)
+	f.Descent, _ = readI16(tbl, 6)
 	return nil
 }
 
-func parseHMTX(f *Font, data []byte) error {
+func parseHMTX(_ *Font, data []byte) error {
 	_, err := findTable(data, "hmtx")
-	return err
+	if err != nil {
+		return fmt.Errorf("font: parsing hmtx table: %w", err)
+	}
+	return nil
 }
 
-func parseMaxp(f *Font, data []byte) error {
+func parseMaxp(_ *Font, data []byte) error {
 	_, err := findTable(data, "maxp")
 	if err != nil {
-		return err
+		return fmt.Errorf("font: parsing maxp table: %w", err)
 	}
 	return nil
 }
@@ -213,7 +212,7 @@ func parseMaxp(f *Font, data []byte) error {
 func parseCMap(f *Font, data []byte) error {
 	tbl, err := findTable(data, "cmap")
 	if err != nil {
-		return err
+		return fmt.Errorf("font: parsing cmap table: %w", err)
 	}
 	if len(tbl) < 4 {
 		return fmt.Errorf("font: cmap table too short")
@@ -535,7 +534,7 @@ func parseGlyf(f *Font, data []byte) error {
 
 	headTable, err := findTable(data, "head")
 	if err != nil {
-		return err
+		return fmt.Errorf("font: parsing glyf table: finding head: %w", err)
 	}
 
 	indexToLocFormat := binary.BigEndian.Uint16(headTable[50:])
@@ -604,6 +603,7 @@ func parseGlyf(f *Font, data []byte) error {
 	return nil
 }
 
+// IsTTF checks whether the given data represents a TTF font.
 func IsTTF(data []byte) bool {
 	if len(data) < 4 {
 		return false
@@ -612,6 +612,7 @@ func IsTTF(data []byte) bool {
 	return sfVersion == 0x00010000 || sfVersion == 0x4F54544F
 }
 
+// StemVValue returns the StemV value for the font descriptor.
 func (f *Font) StemVValue() int16 {
 	if f.StemV != 0 {
 		return f.StemV
