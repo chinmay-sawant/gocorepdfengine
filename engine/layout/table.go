@@ -1,6 +1,10 @@
 package layout
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/chinmay/gocorepdfengine/engine/image"
+)
 
 type CellStyle struct {
 	FontName    string
@@ -16,10 +20,16 @@ type CellStyle struct {
 	Align       Alignment
 }
 
+type CellImage struct {
+	Data        []byte // raw PNG or JPEG bytes
+	IsJPEG      bool
+}
+
 type Cell struct {
 	Text  string
 	Style CellStyle
 	W, H  float64
+	Image *CellImage
 }
 
 type Row struct {
@@ -78,12 +88,19 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				cb.DrawRect(cellRect, cell.Style.FillColor, nil)
 			}
 
-			drawSide(cb, cellRect, cell.Style.BorderLeft, "left")
-			drawSide(cb, cellRect, cell.Style.BorderRight, "right")
-			drawSide(cb, cellRect, cell.Style.BorderTop, "top")
-			drawSide(cb, cellRect, cell.Style.BorderBottom, "bottom")
-			if cell.Style.Border != nil {
-				cb.DrawRect(cellRect, nil, cell.Style.Border)
+			// Render image if present (content before borders so borders stay on top).
+			if cell.Image != nil {
+				imgName := fmt.Sprintf("Img%d", len(cb.ImageObjects)+1)
+				var img *image.Image
+				var err error
+				if cell.Image.IsJPEG {
+					img, err = image.NewFromJPEG(cell.Image.Data)
+				} else {
+					img, err = image.NewFromPNG(cell.Image.Data)
+				}
+				if err == nil {
+					cb.PlaceImage(img, imgName, cellRect.X, cellRect.Y, cellRect.W, cellRect.H)
+				}
 			}
 
 			availW := cellW - cell.Style.Padding*2
@@ -91,6 +108,10 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				availW = 1
 			}
 			lines := WrapText(cell.Text, cell.Style.FontSize, availW)
+
+			// Vertically center the text block within the cell.
+			totalTextH := float64(len(lines)) * cell.Style.FontSize * 1.2
+			textTop := y - row.Height + (row.Height-totalTextH)/2
 
 			for li, line := range lines {
 				tx := x + cell.Style.Padding
@@ -100,7 +121,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				case AlignRight:
 					tx = x + cellW - textWidth(line, cell.Style.FontSize) - cell.Style.Padding
 				}
-				lineY := y - row.Height + cell.Style.Padding + float64(li)*cell.Style.FontSize*1.2
+				lineY := textTop + float64(li)*cell.Style.FontSize*1.2
 
 				textRun := TextRun{
 					Text:     line,
@@ -114,6 +135,15 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 					textRun.Color = cell.Style.TextColor
 				}
 				cb.PlaceText(textRun)
+			}
+
+			// Borders on top so they overlay cell content (images, fills, text).
+			drawSide(cb, cellRect, cell.Style.BorderLeft, "left")
+			drawSide(cb, cellRect, cell.Style.BorderRight, "right")
+			drawSide(cb, cellRect, cell.Style.BorderTop, "top")
+			drawSide(cb, cellRect, cell.Style.BorderBottom, "bottom")
+			if cell.Style.Border != nil {
+				cb.DrawRect(cellRect, nil, cell.Style.Border)
 			}
 
 			x += cellW

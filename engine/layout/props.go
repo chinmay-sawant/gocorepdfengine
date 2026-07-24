@@ -14,7 +14,7 @@ const (
 	AlignRight  Alignment = 2
 )
 
-type CellBorder [4]bool // left, right, top, bottom
+type CellBorder [4]bool // left, right, top, bottom (per TEMPLATE_REFERENCE.md)
 
 type CellProps struct {
 	FontName  string

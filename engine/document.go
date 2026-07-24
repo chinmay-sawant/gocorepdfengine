@@ -9,6 +9,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/content"
 	"github.com/chinmay/gocorepdfengine/engine/doc"
 	"github.com/chinmay/gocorepdfengine/engine/font"
+	"github.com/chinmay/gocorepdfengine/engine/image"
 	"github.com/chinmay/gocorepdfengine/engine/meta"
 	"github.com/chinmay/gocorepdfengine/engine/page"
 	"github.com/chinmay/gocorepdfengine/engine/pdfa"
@@ -16,11 +17,12 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
-// PageContent is one page stream plus font resource labels used on that page.
+// PageContent is one page stream plus font/image resource labels used on that page.
 type PageContent struct {
-	Stream    []byte
-	FontRes   map[string]string // logical font name -> /F1 label
-	UsedFonts map[string]bool
+	Stream         []byte
+	FontRes        map[string]string // logical font name -> /F1 label
+	UsedFonts      map[string]bool
+	ImageXObjects  map[string]*image.Image // XObject name -> image data
 }
 
 // DocumentConfig drives multi-page generation from pre-built content streams
@@ -258,6 +260,27 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			fontMap["F1"] = shared.fontRef
 		}
 		pg.FontResources = fontMap
+
+		// Image XObjects
+		xobjMap := map[string]doc.ObjectID{}
+		if pc := cfg.Pages[i]; len(pc.ImageXObjects) > 0 {
+			for xObjName, img := range pc.ImageXObjects {
+				imgRef := d.AllocID()
+				xobjMap[xObjName] = imgRef
+				dict := map[string]interface{}{
+					"/Type":             "/XObject",
+					"/Subtype":          "/Image",
+					"/Width":            img.Width,
+					"/Height":           img.Height,
+					"/ColorSpace":       img.ColorSpace,
+					"/BitsPerComponent": img.BitsPerComponent,
+					"/Filter":           img.Filter,
+				}
+				d.AddObjectAt(imgRef, &write.Stream{Dict: dict, Data: img.Data})
+			}
+		}
+		pg.XObjectResources = xobjMap
+
 		if isA4 {
 			pg.ColorSpaceResources = map[string]interface{}{
 				"/DefaultRGB":  []interface{}{"/ICCBased", write.Ref(int(srgbRef), 0)},
@@ -268,7 +291,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			sp := structure.StructParentsValue(i)
 			pg.StructParents = &sp
 		}
-		d.AddObjectAt(pageIDs[i], pg.ToDict(pg.FontResources, nil, pagesID))
+		d.AddObjectAt(pageIDs[i], pg.ToDict(fontMap, xobjMap, pagesID))
 	}
 
 	p := page.NewPages()

@@ -9,6 +9,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine"
 	"github.com/chinmay/gocorepdfengine/engine/color"
 	"github.com/chinmay/gocorepdfengine/engine/doc"
+	"github.com/chinmay/gocorepdfengine/engine/image"
 	"github.com/chinmay/gocorepdfengine/engine/layout"
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
@@ -46,10 +47,15 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	pages := make([]engine.PageContent, 0, len(res.Builders))
 	for _, b := range res.Builders {
+		imgs := make(map[string]*image.Image)
+		for name, obj := range b.ImageObjects {
+			imgs[name] = obj.Img
+		}
 		pages = append(pages, engine.PageContent{
-			Stream:    b.Bytes(),
-			FontRes:   b.FontRes,
-			UsedFonts: b.UsedFonts,
+			Stream:        b.Bytes(),
+			FontRes:       b.FontRes,
+			UsedFonts:     b.UsedFonts,
+			ImageXObjects: imgs,
 		})
 	}
 

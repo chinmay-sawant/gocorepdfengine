@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/chinmay/gocorepdfengine/engine/content"
+	"github.com/chinmay/gocorepdfengine/engine/image"
 )
 
 type Point struct {
@@ -29,21 +30,28 @@ type BorderStyle struct {
 }
 
 type ContentBuilder struct {
-	Stream    *content.Stream
-	FontRes   map[string]string
-	UsedFonts map[string]bool
-	MCID      int
+	Stream       *content.Stream
+	FontRes      map[string]string
+	UsedFonts    map[string]bool
+	ImageObjects map[string]*ImageObj
+	MCID         int
 	Width, Height float64
+}
+
+type ImageObj struct {
+	Img   *image.Image
+	Data  []byte
 }
 
 func NewContentBuilder(width, height float64) *ContentBuilder {
 	return &ContentBuilder{
-		Stream:    content.NewStream(),
-		FontRes:   make(map[string]string),
-		UsedFonts: make(map[string]bool),
-		MCID:      0,
-		Width:     width,
-		Height:    height,
+		Stream:       content.NewStream(),
+		FontRes:      make(map[string]string),
+		UsedFonts:    make(map[string]bool),
+		ImageObjects: make(map[string]*ImageObj),
+		MCID:         0,
+		Width:        width,
+		Height:       height,
 	}
 }
 
@@ -63,17 +71,46 @@ func WrapText(text string, fontSize, maxWidth float64) []string {
 	runes := []rune(text)
 	start := 0
 	for start < len(runes) {
+		if len(runes)-start == 1 {
+			lines = append(lines, string(runes[start:]))
+			break
+		}
+		// Find the longest initial segment that fits.
 		end := start + 1
 		for end <= len(runes) && textWidth(string(runes[start:end]), fontSize) <= maxWidth {
 			end++
 		}
-		lines = append(lines, string(runes[start:end-1]))
-		start = end - 1
+		// If the whole remaining text fits, use it.
+		if end > len(runes) {
+			lines = append(lines, string(runes[start:]))
+			break
+		}
+		// Try to break at a space (word boundary, trimming the trailing space).
+		breakAt := end - 1
+		for i := end - 1; i > start; i-- {
+			if runes[i] == ' ' {
+				breakAt = i
+				break
+			}
+		}
+		if breakAt == start {
+			// No space found — break at character boundary.
+			breakAt = end - 1
+		}
+		lines = append(lines, string(runes[start:breakAt]))
+		start = breakAt
+		// Skip leading space on the next line.
+		for start < len(runes) && runes[start] == ' ' {
+			start++
+		}
 	}
 	return lines
 }
 
 func (cb *ContentBuilder) PlaceText(run TextRun) {
+	if run.Text == "" {
+		return
+	}
 	label, ok := cb.FontRes[run.FontName]
 	if !ok {
 		label = fmt.Sprintf("F%d", len(cb.FontRes)+1)
@@ -120,6 +157,24 @@ func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 	fmt.Fprintf(&cb.Stream.Buf, "0 0 Td\n")
 	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
 	cb.Stream.ET()
+}
+
+func (cb *ContentBuilder) PlaceImage(img *image.Image, objName string, x, y, w, h float64) {
+	cb.ImageObjects[objName] = &ImageObj{Img: img, Data: img.Data}
+	// Preserve aspect ratio: scale to fit within w×h, then center.
+	iw, ih := float64(img.Width), float64(img.Height)
+	scale := w / iw
+	if ih*scale > h {
+		scale = h / ih
+	}
+	dw := iw * scale
+	dh := ih * scale
+	dx := x + (w-dw)/2
+	dy := y + (h-dh)/2
+	fmt.Fprintf(&cb.Stream.Buf, "q\n")
+	fmt.Fprintf(&cb.Stream.Buf, "%s 0 0 %s %s %s cm\n", fmtFloat(dw), fmtFloat(dh), fmtFloat(dx), fmtFloat(dy))
+	cb.Stream.Do(objName)
+	fmt.Fprintf(&cb.Stream.Buf, "Q\n")
 }
 
 func (cb *ContentBuilder) Bytes() []byte {

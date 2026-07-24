@@ -1,12 +1,14 @@
 package render
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
 	"github.com/chinmay/gocorepdfengine/engine"
 	"github.com/chinmay/gocorepdfengine/engine/color"
 	"github.com/chinmay/gocorepdfengine/engine/doc"
+	"github.com/chinmay/gocorepdfengine/engine/image"
 	"github.com/chinmay/gocorepdfengine/engine/layout"
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
@@ -32,9 +34,9 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		var res layout.LayoutResult
 		var err error
 		if len(allBuilders) == 0 {
-			res, err = tbl.LayOut(marginL, marginT, pageW, pageH-marginB, cur)
+			res, err = tbl.LayOut(marginL, marginT, pageW, pageH, cur)
 		} else {
-			res, err = tbl.LayOutFrom(marginL, marginT, pageW, pageH-marginB, y, cur)
+			res, err = tbl.LayOutFrom(marginL, marginT, pageW, pageH, y, cur)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("template layout: %w", err)
@@ -50,10 +52,15 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 
 	pages := make([]engine.PageContent, 0, len(allBuilders))
 	for _, b := range allBuilders {
+		imgs := make(map[string]*image.Image)
+		for name, obj := range b.ImageObjects {
+			imgs[name] = obj.Img
+		}
 		pages = append(pages, engine.PageContent{
-			Stream:    b.Bytes(),
-			FontRes:   b.FontRes,
-			UsedFonts: b.UsedFonts,
+			Stream:        b.Bytes(),
+			FontRes:       b.FontRes,
+			UsedFonts:     b.UsedFonts,
+			ImageXObjects: imgs,
 		})
 	}
 
@@ -103,7 +110,7 @@ func buildTables(t *model.PDFTemplate, contentW float64) []*layout.TableLayout {
 			}
 		case "spacer":
 			if elem.Index >= 0 && elem.Index < len(t.Spacers) {
-				tables = append(tables, spacerLayout(t.Spacers[elem.Index].Height))
+				tables = append(tables, spacerLayout(t.Spacers[elem.Index].Height, contentW))
 			}
 		}
 	}
@@ -153,15 +160,9 @@ func titleLayout(title *model.Title, contentW float64) *layout.TableLayout {
 }
 
 func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
-	weights := td.ColumnWidths
-	if len(weights) == 0 {
-		weights = make([]float64, td.MaxColumns)
-		for i := range weights {
-			weights[i] = 1
-		}
-	}
-
-	scaleColsWeights(weights, contentW)
+	// Determine column widths: use explicit cell widths if present,
+	// otherwise scale relative weights to content width.
+	weights := resolveColWidths(td, contentW)
 	tl := &layout.TableLayout{ColWidths: weights}
 
 	var defaultBG *color.RGB
@@ -180,15 +181,13 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 	}
 
 	for i, row := range td.Rows {
-		var rowH float64
+		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {
 			rowH = td.RowHeights[i]
-		} else {
-			rowH = 0
-			for _, c := range row.Row {
-				if c.Height > rowH {
-					rowH = c.Height
-				}
+		}
+		for _, c := range row.Row {
+			if c.Height > rowH {
+				rowH = c.Height
 			}
 		}
 		if rowH <= 0 {
@@ -216,7 +215,15 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 			} else if defaultTC != [3]float64{} {
 				tc = defaultTC
 			}
-			r.Cells = append(r.Cells, cellFromProps(c.Text, p, &tc, fill, c.Width, rowH))
+			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
+			if c.Image != nil && c.Image.ImageData != "" {
+				raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData)
+				if err == nil && len(raw) > 0 {
+					isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
+					lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
+				}
+			}
+			r.Cells = append(r.Cells, lc)
 		}
 
 		for len(r.Cells) < td.MaxColumns {
@@ -228,13 +235,79 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 	return tl
 }
 
-func spacerLayout(height float64) *layout.TableLayout {
+func spacerLayout(height, contentW float64) *layout.TableLayout {
 	return &layout.TableLayout{
-		ColWidths: []float64{1},
+		ColWidths: []float64{contentW},
 		Rows: []layout.Row{
 			{Height: height, Cells: []layout.Cell{{Style: layout.CellStyle{}}}},
 		},
 	}
+}
+
+// resolveColWidths returns column widths for the table.
+// It scans all cells for explicit width values; if any column has an explicit width,
+// that width is used. Remaining columns are sized from relative weights scaled to
+// the leftover space. If no cell specifies a width, relative weights are scaled to
+// the full contentW.
+func resolveColWidths(td *model.TableDef, contentW float64) []float64 {
+	weights := td.ColumnWidths
+	if len(weights) == 0 {
+		weights = make([]float64, td.MaxColumns)
+		for i := range weights {
+			weights[i] = 1
+		}
+	}
+
+	// Scan all cells for explicit widths.
+	explicit := make(map[int]float64)
+	for _, r := range td.Rows {
+		for ci, c := range r.Row {
+			if c.Width > 0 {
+				if existing, ok := explicit[ci]; !ok || c.Width > existing {
+					explicit[ci] = c.Width
+				}
+			}
+		}
+	}
+
+	if len(explicit) == 0 {
+		scaleColsWeights(weights, contentW)
+		return weights
+	}
+
+	used := 0.0
+	for ci, w := range explicit {
+		if ci < len(weights) {
+			weights[ci] = w
+			used += w
+		}
+	}
+
+	// Scale remaining (non-explicit) columns to fill the leftover space.
+	remaining := contentW - used
+	var implicitSum float64
+	for ci, w := range weights {
+		if _, ok := explicit[ci]; !ok {
+			implicitSum += w
+		}
+	}
+	if implicitSum > 0 && remaining > 0 {
+		factor := remaining / implicitSum
+		for ci := range weights {
+			if _, ok := explicit[ci]; !ok {
+				weights[ci] *= factor
+			}
+		}
+	} else if remaining > 0 {
+		// All columns are explicit but total is less than contentW — distribute
+		// the leftover proportionally among all columns.
+		factor := contentW / used
+		for ci := range weights {
+			weights[ci] *= factor
+		}
+	}
+
+	return weights
 }
 
 func scaleColsWeights(weights []float64, total float64) {
@@ -265,7 +338,8 @@ func cellFromProps(text string, p layout.CellProps, tc *[3]float64, fill *color.
 		style.FillColor = &f
 	}
 	bw := 0.5
-	bc := [3]float64{0.7, 0.7, 0.7}
+	bc := [3]float64{0.3, 0.3, 0.3}
+	// Props order (positions 5-8): left, right, top, bottom
 	if p.Border[0] {
 		style.BorderLeft = &layout.BorderStyle{Width: bw, Color: bc}
 	}
