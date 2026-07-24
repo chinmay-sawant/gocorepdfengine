@@ -1,6 +1,6 @@
 # Phase 7 — Optional Product Features
 
-**Status:** Not started  
+**Status:** ⏸️ NOT STARTED — deprioritized; Phase 1–5 complete  
 **Depends on:** Phase 1–5 for anything that must remain A-4/UA-2; features may have non-compliant modes  
 **Base plan refs:** §2.4, §11 Phase G, §15 out of scope list
 

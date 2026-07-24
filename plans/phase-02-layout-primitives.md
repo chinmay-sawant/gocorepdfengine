@@ -1,6 +1,6 @@
 # Phase 2 — Layout Primitives (Untagged)
 
-**Status:** Not started  
+**Status:** ✅ COMPLETED — packages created (`layout`, `image`); not yet wired into `engine.Generate()`  
 **Depends on:** Phase 1 complete  
 **Base plan refs:** §4 (`layout`, `image`, `content`), §5 Phase 2–3 (untagged), §11 Phase B
 
@@ -14,41 +14,41 @@ Add real drawing: text runs, tables, borders, multi-page flow, and raster images
 
 ## Package layout
 
-- [ ] `engine/layout/` — margins, flow, tables, page break
-- [ ] `engine/image/` — JPEG/PNG decode → XObject (DeviceRGB OK)
-- [ ] Extend `engine/content/` — path operators, text state, `Do` for images
-- [ ] Extend `engine/page/` — multi-page kids, per-page content streams
+- [x] `engine/layout/` — margins, flow, tables, page break
+- [x] `engine/image/` — JPEG/PNG decode → XObject (DeviceRGB OK)
+- [x] Extend `engine/content/` — path operators, text state, `Do` for images
+- [x] Extend `engine/page/` — multi-page kids, per-page content streams
 
 ---
 
 ## Checklist — text & geometry
 
-- [ ] Positioned text with font size / color
-- [ ] Text escape for PDF string literals `(…)`
-- [ ] Path borders: `m` / `l` / `re` / `S` / `f`
-- [ ] Page margins and content box
-- [ ] Multi-page: content overflow creates new page objects + updates `/Count`
+- [x] Positioned text with font size / color
+- [x] Text escape for PDF string literals `(…)`
+- [x] Path borders: `m` / `l` / `re` / `S` / `f`
+- [x] Page margins and content box
+- [x] Multi-page: content overflow creates new page objects + updates `/Count`
 
 ## Checklist — tables
 
-- [ ] Fixed-column table grid
-- [ ] Cell text with wrapping (basic)
-- [ ] Cell borders (vector)
-- [ ] Header row styling (visual only; no `/TH` structure yet)
-- [ ] Table can span pages (row split or page-break between rows)
+- [x] Fixed-column table grid
+- [x] Cell text with wrapping (basic)
+- [x] Cell borders (vector)
+- [x] Header row styling (visual only; no `/TH` structure yet)
+- [x] Table can span pages (row split or page-break between rows)
 
 ## Checklist — images
 
-- [ ] JPEG → `/Subtype /Image` with `/Filter /DCTDecode`
-- [ ] PNG → decode RGB, `/Filter /FlateDecode`
-- [ ] XObject keys: `/Type /XObject`, `/Subtype /Image`, `/Width`, `/Height`, `/ColorSpace /DeviceRGB` (or gray), `/BitsPerComponent`, `/Length`
-- [ ] Image drawn via content `cm` + `/ImN Do`
-- [ ] Optional: dedupe identical image bytes → one XObject
+- [x] JPEG → `/Subtype /Image` with `/Filter /DCTDecode`
+- [x] PNG → decode RGB, `/Filter /FlateDecode`
+- [x] XObject keys: `/Type /XObject`, `/Subtype /Image`, `/Width`, `/Height`, `/ColorSpace /DeviceRGB` (or gray), `/BitsPerComponent`, `/Length`
+- [x] Image drawn via content `cm` + `/ImN Do`
+- [x] Optional: dedupe identical image bytes → one XObject
 
 ## Checklist — resources
 
-- [ ] Per-page `/Resources` with `/Font` and `/XObject` maps
-- [ ] Content stream compression with `/Filter /FlateDecode` (recommended)
+- [x] Per-page `/Resources` with `/Font` and `/XObject` maps
+- [x] Content stream compression with `/Filter /FlateDecode` (recommended)
 
 ## Checklist — fixtures
 
