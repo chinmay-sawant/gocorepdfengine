@@ -145,15 +145,23 @@ func Generate(config Config) (Result, error) {
 		if loadedFont != nil {
 			libName := loadedFont.Name
 
-			// Mark all used characters from the content
+			// Mark all used characters from the content.
 			for _, r := range config.Text {
 				loadedFont.AddChar(r)
 			}
+			// Ensure common characters are in the glyph map for width consistency.
+			for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |()$#%&*+<=>?@[]{!}_" {
+				loadedFont.AddChar(r)
+			}
 
-			fontFile2Data := loadedFont.RawData
+			// Generate subset so embedded font only contains used glyphs.
+			fontData := loadedFont.RawData
+			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
+				fontData = loadedFont.SubsetData
+			}
 
 			// FontFile2 stream with compressed font data
-			compressed := compressData(fontFile2Data)
+			compressed := compressData(fontData)
 			d.AddObjectAt(fontFile2ID, &write.Stream{
 				Dict: map[string]interface{}{
 					"/Length": len(compressed),

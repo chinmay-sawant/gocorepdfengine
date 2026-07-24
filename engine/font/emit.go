@@ -18,15 +18,18 @@ func FontDict(baseFont string, cidFontRef, toUnicodeRef doc.ObjectID) map[string
 }
 
 func CIDFontDict(font *Font, descriptorRef, cidToGIDRef doc.ObjectID) map[string]interface{} {
+	// Default width: match the .notdef glyph (GID 0) width, since any unmapped
+	// CID falls back to .notdef and /DW must be consistent with the font program.
+	dw := font.DefaultWidth()
 	d := map[string]interface{}{
 		"/Type":           "/Font",
 		"/Subtype":        "/CIDFontType2",
 		"/BaseFont":       "/" + font.Name,
 		"/CIDSystemInfo":  CIDSystemInfoDict("Adobe", "Identity", 0),
 		"/FontDescriptor": fmt.Sprintf("%d 0 R", descriptorRef),
-		"/DW":             1000,
+		"/DW":             dw,
 	}
-		if w := WidthsArray(font); w != nil {
+	if w := WidthsArray(font); w != nil {
 		d["/W"] = w
 	}
 	if cidToGIDRef == 0 {

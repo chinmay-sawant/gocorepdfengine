@@ -2,10 +2,11 @@ package image
 
 import (
 	"bytes"
-	"compress/flate"
+	"compress/zlib"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"image/jpeg"
 	"image/png"
 	"sync"
 )
@@ -140,33 +141,46 @@ func NewFromPNG(data []byte) (*Image, error) {
 	w := bounds.Dx()
 	h := bounds.Dy()
 
-	rawRGB := make([]byte, 0, w*h*3)
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := src.At(x, y).RGBA()
-			rawRGB = append(rawRGB, byte(r>>8), byte(g>>8), byte(b>>8))
+	// For large images, use JPEG encoding which GS handles reliably.
+	const jpegThreshold = 100 * 100 // 100x100 pixels
+	var img *Image
+	if w*h >= jpegThreshold {
+		var jpgBuf bytes.Buffer
+		if err := jpeg.Encode(&jpgBuf, src, &jpeg.Options{Quality: 85}); err != nil {
+			return nil, fmt.Errorf("image: JPEG encode error: %w", err)
 		}
-	}
-
-	var compressed bytes.Buffer
-	zw, err := flate.NewWriter(&compressed, flate.DefaultCompression)
-	if err != nil {
-		return nil, fmt.Errorf("image: flate error: %w", err)
-	}
-	if _, err := zw.Write(rawRGB); err != nil {
-		return nil, err
-	}
-	if err := zw.Close(); err != nil {
-		return nil, err
-	}
-
-	img := &Image{
-		Width:            w,
-		Height:           h,
-		ColorSpace:       "/DeviceRGB",
-		BitsPerComponent: 8,
-		Data:             compressed.Bytes(),
-		Filter:           "/FlateDecode",
+		img = &Image{
+			Width:            w,
+			Height:           h,
+			ColorSpace:       "/DeviceRGB",
+			BitsPerComponent: 8,
+			Data:             jpgBuf.Bytes(),
+			Filter:           "/DCTDecode",
+		}
+	} else {
+		rawRGB := make([]byte, 0, w*h*3)
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				r, g, b, _ := src.At(x, y).RGBA()
+				rawRGB = append(rawRGB, byte(r>>8), byte(g>>8), byte(b>>8))
+			}
+		}
+		var compressed bytes.Buffer
+		zw := zlib.NewWriter(&compressed)
+		if _, err := zw.Write(rawRGB); err != nil {
+			return nil, err
+		}
+		if err := zw.Close(); err != nil {
+			return nil, err
+		}
+		img = &Image{
+			Width:            w,
+			Height:           h,
+			ColorSpace:       "/DeviceRGB",
+			BitsPerComponent: 8,
+			Data:             compressed.Bytes(),
+			Filter:           "/FlateDecode",
+		}
 	}
 	cacheMu.Lock()
 	cache[key] = img

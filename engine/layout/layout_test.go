@@ -21,8 +21,11 @@ func TestContentBuilder(t *testing.T) {
 	if !strings.Contains(output, "BT") {
 		t.Error("expected content stream to contain BT")
 	}
-	if !strings.Contains(output, "Hello World") {
-		t.Error("expected content stream to contain text")
+	if !strings.Contains(output, "Tj") {
+		t.Error("expected content stream to contain Tj operator")
+	}
+	if !strings.Contains(output, "<00480065006C006C006F00200057006F0072006C0064>") {
+		t.Error("expected content stream to contain hex-encoded text")
 	}
 }
 
@@ -114,11 +117,11 @@ func TestTableLayout(t *testing.T) {
 		},
 	}
 
-	builders, err := tl.LayOut(50, 50, 612, 792, cb)
+	res, err := tl.LayOut(50, 50, 612, 792, cb)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(builders) < 1 {
+	if len(res.Builders) < 1 {
 		t.Error("expected at least one ContentBuilder")
 	}
 }
@@ -141,11 +144,11 @@ func TestTableLayout_PageBreak(t *testing.T) {
 		Rows:      rows,
 	}
 
-	builders, err := tl.LayOut(10, 10, 200, 100, cb)
+	res, err := tl.LayOut(10, 10, 200, 100, cb)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(builders) < 2 {
+	if len(res.Builders) < 2 {
 		t.Error("expected page break to produce multiple builders with small page height")
 	}
 }
