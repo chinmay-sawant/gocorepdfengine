@@ -20,6 +20,7 @@ type Font struct {
 	Glyphs      map[rune]*Glyph
 	RawData     []byte
 	SubsetData  []byte
+	SubGIDMap   map[uint16]uint16
 
 	cmap         map[rune]uint16
 	glyphMetrics map[uint16]*Glyph

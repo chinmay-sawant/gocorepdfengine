@@ -1,6 +1,9 @@
 package font
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 func (f *Font) ToUnicodeCMap() []byte {
 	keys := f.UsedRunes()
@@ -11,28 +14,22 @@ func (f *Font) ToUnicodeCMap() []byte {
 	type bfRange struct {
 		startCID uint16
 		endCID   uint16
-		unicode  rune
 	}
 
 	var ranges []bfRange
-	cid := uint16(1)
-
-	for i, r := range keys {
-		if i == 0 {
-			ranges = append(ranges, bfRange{startCID: cid, endCID: cid, unicode: r})
-			cid++
+	prev := keys[0]
+	rs := prev
+	for i := 1; i < len(keys); i++ {
+		curr := keys[i]
+		if curr == prev+1 {
+			prev = curr
 			continue
 		}
-
-		prev := keys[i-1]
-
-		if r == prev+1 {
-			ranges[len(ranges)-1].endCID = cid
-		} else {
-			ranges = append(ranges, bfRange{startCID: cid, endCID: cid, unicode: r})
-		}
-		cid++
+		ranges = append(ranges, bfRange{startCID: uint16(rs), endCID: uint16(prev)})
+		rs = curr
+		prev = curr
 	}
+	ranges = append(ranges, bfRange{startCID: uint16(rs), endCID: uint16(prev)})
 
 	cmap := make([]byte, 0, 1024)
 
@@ -50,12 +47,12 @@ func (f *Font) ToUnicodeCMap() []byte {
 	appendStr("<0000> <FFFF>\n")
 	appendStr("endcodespacerange\n")
 
-	appendStr(fmt.Sprintf("%d begindbfrange\n", len(ranges)))
+	appendStr(fmt.Sprintf("%d beginbfrange\n", len(ranges)))
 
 	for _, r := range ranges {
 		startHex := fmt.Sprintf("%04X", r.startCID)
 		endHex := fmt.Sprintf("%04X", r.endCID)
-		uniStr := fmt.Sprintf("%04X", r.unicode)
+		uniStr := fmt.Sprintf("%04X", r.startCID)
 		appendStr(fmt.Sprintf("<%s> <%s> <%s>\n", startHex, endHex, uniStr))
 	}
 
@@ -66,4 +63,22 @@ func (f *Font) ToUnicodeCMap() []byte {
 	appendStr("end\n")
 
 	return cmap
+}
+
+func (f *Font) BuildCIDToGIDMap() []byte {
+	data := make([]byte, 65536*2)
+	for r := range f.Glyphs {
+		cid := uint32(r)
+		if cid >= 65536 {
+			continue
+		}
+		if f.SubGIDMap != nil {
+			if newGID, ok := f.SubGIDMap[f.cmap[r]]; ok {
+				binary.BigEndian.PutUint16(data[cid*2:], newGID)
+			}
+		} else {
+			binary.BigEndian.PutUint16(data[cid*2:], f.cmap[r])
+		}
+	}
+	return data
 }

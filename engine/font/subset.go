@@ -127,6 +127,7 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 	for newID, oldGID := range gidList {
 		gidMap[oldGID] = uint16(newID)
 	}
+	f.SubGIDMap = gidMap
 
 	for _, oldGID := range gidList {
 		var data []byte
@@ -157,9 +158,9 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 		var width uint16
 		if hmtxTable != nil {
 			if oldGID < numHMetrics {
-				width = binary.BigEndian.Uint16(hmtxTable[uint32(oldGID)*2:])
+				width = binary.BigEndian.Uint16(hmtxTable[uint32(oldGID)*4:])
 			} else if numHMetrics > 0 {
-				width = binary.BigEndian.Uint16(hmtxTable[uint32(numHMetrics-1)*2:])
+				width = binary.BigEndian.Uint16(hmtxTable[uint32(numHMetrics-1)*4:])
 			}
 		}
 
@@ -247,7 +248,17 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 	var newCMapData []byte
 	{
 		usedChars := f.UsedChars()
-		newCMapData = buildFormat4CMap(usedChars, gidMap)
+		subtable := buildFormat4CMap(usedChars, gidMap)
+		// Wrap in cmap table header (version + numTables + encoding record)
+		headerLen := uint32(4 + 8)
+		cmap := make([]byte, headerLen+uint32(len(subtable)))
+		binary.BigEndian.PutUint16(cmap, 0)      // version
+		binary.BigEndian.PutUint16(cmap[2:], 1)   // numTables
+		binary.BigEndian.PutUint16(cmap[4:], 3)   // platformID = Microsoft
+		binary.BigEndian.PutUint16(cmap[6:], 1)   // encodingID = Unicode BMP
+		binary.BigEndian.PutUint32(cmap[8:], headerLen) // offset to subtable
+		copy(cmap[headerLen:], subtable)
+		newCMapData = cmap
 	}
 
 	copyTable := func(tag string) []byte {
@@ -278,7 +289,14 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 	addTable("OS/2", copyTable("OS/2"))
 	addTable("name", copyTable("name"))
 	addTable("cmap", newCMapData)
-	addTable("post", copyTable("post"))
+	postData := copyTable("post")
+	if len(postData) >= 34 {
+		newPostData := make([]byte, len(postData))
+		copy(newPostData, postData)
+		binary.BigEndian.PutUint16(newPostData[32:], newNumGlyphs)
+		postData = newPostData
+	}
+	addTable("post", postData)
 	addTable("loca", newLocaData)
 	addTable("glyf", newGlyfData)
 	addTable("hmtx", newHmtxData)

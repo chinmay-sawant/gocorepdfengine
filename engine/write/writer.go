@@ -60,10 +60,15 @@ func (e *Encoder) WriteDict(dict map[string]interface{}) {
 	e.buf.WriteString(">>")
 }
 
+// PDFString represents a PDF literal string value "(...)".
+type PDFString string
+
 func (e *Encoder) writeValue(v interface{}) {
 	switch val := v.(type) {
 	case string:
 		e.buf.WriteString(val)
+	case PDFString:
+		e.buf.WriteString(StringLit(string(val)))
 	case int:
 		fmt.Fprintf(&e.buf, "%d", val)
 	case int64:

@@ -63,6 +63,14 @@ func (s *Stream) Tj(text string) {
 	s.Buf.WriteString(") Tj\n")
 }
 
+func (s *Stream) TjCID(text string) {
+	s.Buf.WriteByte('<')
+	for _, r := range text {
+		fmt.Fprintf(&s.Buf, "%04X", r)
+	}
+	s.Buf.WriteString("> Tj\n")
+}
+
 func (s *Stream) Tm(a, b, c, d, e, f float64) {
 	fmt.Fprintf(&s.Buf, "%s %s %s %s %s %s Tm\n",
 		fmtFloat(a), fmtFloat(b), fmtFloat(c),
@@ -142,6 +150,10 @@ func (s *Stream) Q() {
 
 func (s *Stream) BDC(tag string, mcid int) {
 	fmt.Fprintf(&s.Buf, "/%s <</MCID %d>> BDC\n", tag, mcid)
+}
+
+func (s *Stream) BMC(tag string) {
+	fmt.Fprintf(&s.Buf, "/%s BMC\n", tag)
 }
 
 func (s *Stream) EMC() {

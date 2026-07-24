@@ -405,8 +405,8 @@ func parseName(f *Font, data []byte) error {
 		return fmt.Errorf("font: name table too short")
 	}
 
-	storage := binary.BigEndian.Uint16(tbl[2:])
-	count := binary.BigEndian.Uint16(tbl[4:])
+	count := binary.BigEndian.Uint16(tbl[2:])
+	storage := binary.BigEndian.Uint16(tbl[4:])
 
 	nameIDs := map[uint16]*string{}
 	nameIDs[1] = &f.Family
@@ -472,11 +472,17 @@ func parseOS2(f *Font, data []byte) error {
 	_ = version
 
 	fsSelection := binary.BigEndian.Uint16(tbl[62:])
+
+	f.Flags |= 1 << 2
+
 	if fsSelection&0x01 != 0 {
 		f.Flags |= 1 << 0
 	}
 	if fsSelection&0x08 != 0 {
 		f.Flags |= 1 << 1
+	}
+	if fsSelection&0x20 != 0 {
+		f.Flags |= 1 << 5
 	}
 
 	// sCapHeight and sxHeight only exist in OS/2 v2+
@@ -560,9 +566,9 @@ func parseGlyf(f *Font, data []byte) error {
 		// Get advance width from hmtx
 		var width int16
 		if gid < numHMetrics {
-			width = int16(binary.BigEndian.Uint16(hmtxTable[uint32(gid)*2:]))
+			width = int16(binary.BigEndian.Uint16(hmtxTable[uint32(gid)*4:]))
 		} else if numHMetrics > 0 {
-			width = int16(binary.BigEndian.Uint16(hmtxTable[uint32(numHMetrics-1)*2:]))
+			width = int16(binary.BigEndian.Uint16(hmtxTable[uint32(numHMetrics-1)*4:]))
 		}
 		g.Width = width
 

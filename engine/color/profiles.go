@@ -2,27 +2,36 @@ package color
 
 import (
 	"bytes"
-	"compress/flate"
+	"compress/zlib"
 	"encoding/binary"
+	"os"
 	"time"
 )
 
 var (
-	srgbCompressed []byte
-	grayCompressed []byte
+	srgbData []byte
+	grayData []byte
 )
 
 func init() {
-	srgbCompressed = compress(buildSRGB())
-	grayCompressed = compress(buildGray())
+	srgbData = loadOrBuildProfile("/usr/share/color/icc/ghostscript/scrgb.icc", buildSRGB)
+	grayData = loadOrBuildProfile("/usr/share/color/icc/ghostscript/sgray.icc", buildGray)
+}
+
+func loadOrBuildProfile(path string, build func() []byte) []byte {
+	data, err := os.ReadFile(path)
+	if err == nil && len(data) > 0 {
+		return compress(data)
+	}
+	return compress(build())
 }
 
 func SRGBProfile() []byte {
-	return srgbCompressed
+	return srgbData
 }
 
 func GrayProfile() []byte {
-	return grayCompressed
+	return grayData
 }
 
 func SRGBProfileDict() map[string]interface{} {
@@ -30,7 +39,7 @@ func SRGBProfileDict() map[string]interface{} {
 		"/N":         3,
 		"/Alternate": "/DeviceRGB",
 		"/Filter":    "/FlateDecode",
-		"/Length":    len(srgbCompressed),
+		"/Length":    len(srgbData),
 	}
 }
 
@@ -39,7 +48,7 @@ func GrayProfileDict() map[string]interface{} {
 		"/N":         1,
 		"/Alternate": "/DeviceGray",
 		"/Filter":    "/FlateDecode",
-		"/Length":    len(grayCompressed),
+		"/Length":    len(grayData),
 	}
 }
 
@@ -169,7 +178,7 @@ func buildGray() []byte {
 
 func compress(data []byte) []byte {
 	var buf bytes.Buffer
-	w, _ := flate.NewWriter(&buf, flate.DefaultCompression)
+	w := zlib.NewWriter(&buf)
 	w.Write(data)
 	w.Close()
 	return buf.Bytes()

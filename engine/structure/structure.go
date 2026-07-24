@@ -10,37 +10,38 @@ import (
 type StructType string
 
 const (
-	S_Document StructType = "Document"
-	S_Part     StructType = "Part"
-	S_Sect     StructType = "Sect"
-	S_Div      StructType = "Div"
-	S_H1       StructType = "H1"
-	S_H2       StructType = "H2"
-	S_P        StructType = "P"
-	S_Table    StructType = "Table"
-	S_TR       StructType = "TR"
-	S_TH       StructType = "TH"
-	S_TD       StructType = "TD"
-	S_Figure   StructType = "Figure"
-	S_Link     StructType = "Link"
-	S_Caption  StructType = "Caption"
-	S_L        StructType = "L"
-	S_LI       StructType = "LI"
-	S_Lbl      StructType = "Lbl"
-	S_LBody    StructType = "LBody"
-	S_Form     StructType = "Form"
+	S_Document StructType = "/Document"
+	S_Part     StructType = "/Part"
+	S_Sect     StructType = "/Sect"
+	S_Div      StructType = "/Div"
+	S_H1       StructType = "/H1"
+	S_H2       StructType = "/H2"
+	S_P        StructType = "/P"
+	S_Table    StructType = "/Table"
+	S_TR       StructType = "/TR"
+	S_TH       StructType = "/TH"
+	S_TD       StructType = "/TD"
+	S_Figure   StructType = "/Figure"
+	S_Link     StructType = "/Link"
+	S_Caption  StructType = "/Caption"
+	S_L        StructType = "/L"
+	S_LI       StructType = "/LI"
+	S_Lbl      StructType = "/Lbl"
+	S_LBody    StructType = "/LBody"
+	S_Form     StructType = "/Form"
 )
 
 type StructElem struct {
-	Type     StructType
-	Title    string
-	Alt      string
-	Lang     string
-	PageRef  doc.ObjectID
-	Parent   doc.ObjectID
-	Kids     []StructElemKid
-	MCID     int
-	ObjectID doc.ObjectID
+	Type         StructType
+	Title        string
+	Alt          string
+	Lang         string
+	PageRef      doc.ObjectID
+	Parent       doc.ObjectID
+	Kids         []StructElemKid
+	MCID         int
+	ObjectID     doc.ObjectID
+	NamespaceRef doc.ObjectID
 }
 
 type StructElemKid struct {
@@ -95,6 +96,9 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 	}
 	if se.Lang != "" {
 		d["/Lang"] = fmt.Sprintf("(%s)", se.Lang)
+	}
+	if se.NamespaceRef != 0 {
+		d["/NS"] = fmt.Sprintf("%d 0 R", se.NamespaceRef)
 	}
 
 	if len(se.Kids) > 0 {

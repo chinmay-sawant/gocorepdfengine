@@ -21,11 +21,12 @@ func CIDFontDict(font *Font, descriptorRef, cidToGIDRef doc.ObjectID) map[string
 	d := map[string]interface{}{
 		"/Type":           "/Font",
 		"/Subtype":        "/CIDFontType2",
+		"/BaseFont":       "/" + font.Name,
 		"/CIDSystemInfo":  CIDSystemInfoDict("Adobe", "Identity", 0),
 		"/FontDescriptor": fmt.Sprintf("%d 0 R", descriptorRef),
 		"/DW":             1000,
 	}
-	if w := WidthsArray(font); len(w) > 0 {
+		if w := WidthsArray(font); w != nil {
 		d["/W"] = w
 	}
 	if cidToGIDRef == 0 {
@@ -61,12 +62,33 @@ func CIDSystemInfoDict(registry, ordering string, supplement int) map[string]int
 }
 
 func WidthsArray(font *Font) []int {
-	widths := font.Widths()
-	if len(widths) == 0 {
+	keys := font.UsedRunes()
+	if len(keys) == 0 {
 		return nil
 	}
-	result := make([]int, 0, len(widths)+2)
-	result = append(result, 1, len(widths))
-	result = append(result, widths...)
+	scale := 1000.0 / float64(font.UnitsPerEm)
+
+	// Groups of contiguous CIDs that share the same width
+	type cidRange struct{ first, last, width int }
+	var ranges []cidRange
+
+	for _, r := range keys {
+		cid := int(r)
+		g, ok := font.Glyphs[r]
+		if !ok {
+			continue
+		}
+		width := int(float64(g.Width)*scale + 0.5)
+		if n := len(ranges); n > 0 && ranges[n-1].width == width && ranges[n-1].last+1 == cid {
+			ranges[n-1].last = cid
+		} else {
+			ranges = append(ranges, cidRange{cid, cid, width})
+		}
+	}
+
+	result := make([]int, 0, len(ranges)*3)
+	for _, r := range ranges {
+		result = append(result, r.first, r.last, r.width)
+	}
 	return result
 }

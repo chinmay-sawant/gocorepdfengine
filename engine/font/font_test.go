@@ -152,8 +152,8 @@ func TestToUnicode(t *testing.T) {
 	if !strings.Contains(s, "begincmap") {
 		t.Error("CMap missing begincmap")
 	}
-	if !strings.Contains(s, "begindbfrange") {
-		t.Error("CMap missing begindbfrange")
+	if !strings.Contains(s, "beginbfrange") {
+		t.Error("CMap missing beginbfrange")
 	}
 	if !strings.Contains(s, "0041") {
 		t.Error("CMap missing 0041 (Unicode for 'A')")
@@ -173,8 +173,8 @@ func TestToUnicodeContiguous(t *testing.T) {
 	f.AddChars([]rune{'X', 'Y', 'Z'})
 	cmap := f.ToUnicodeCMap()
 	s := string(cmap)
-	if !strings.Contains(s, "begindbfrange") {
-		t.Error("CMap missing begindbfrange")
+	if !strings.Contains(s, "beginbfrange") {
+		t.Error("CMap missing beginbfrange")
 	}
 	if !strings.Contains(s, "0058") {
 		t.Error("CMap missing range starting at 0058 (X)")
