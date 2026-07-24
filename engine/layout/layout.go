@@ -60,7 +60,7 @@ func fmtFloat(v float64) string {
 }
 
 func textWidth(text string, fontSize float64) float64 {
-	return float64(len(text)) * fontSize * 0.55
+	return float64(len(text)) * fontSize * 0.52
 }
 
 func WrapText(text string, fontSize, maxWidth float64) []string {

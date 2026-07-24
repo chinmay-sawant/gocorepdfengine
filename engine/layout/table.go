@@ -64,6 +64,12 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 	builders := []*ContentBuilder{startCB}
 	cb := startCB
 
+	// Compute available content width from margins and page width.
+	contentW := pageW - marginLeft*2
+	if contentW <= 0 {
+		contentW = pageW - 72
+	}
+
 	for _, row := range tl.Rows {
 		if y-row.Height < contentBottom {
 			cb = NewContentBuilder(pageW, pageH)
@@ -71,16 +77,47 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 			y = pageH - marginTop
 		}
 
+		// Pre-compute effective cell widths for this row, ensuring total = contentW.
+		cellWidths := make([]float64, len(row.Cells))
+		var explicitSum float64
+		var explicitCount int
+		for ci, cell := range row.Cells {
+			if cell.W > 0 {
+				cellWidths[ci] = cell.W
+				explicitSum += cell.W
+				explicitCount++
+			}
+		}
+		if explicitCount == len(row.Cells) && explicitSum > 0 {
+			// All cells have explicit widths — scale to fill contentW.
+			scale := contentW / explicitSum
+			for ci := range cellWidths {
+				cellWidths[ci] *= scale
+			}
+		} else if explicitCount > 0 && explicitSum < contentW {
+			// Some cells have explicit widths — distribute remaining space equally.
+			remaining := contentW - explicitSum
+			implicitCount := len(row.Cells) - explicitCount
+			share := remaining / float64(implicitCount)
+			for ci := range cellWidths {
+				if cellWidths[ci] <= 0 {
+					cellWidths[ci] = share
+				}
+			}
+		} else {
+			// No explicit widths — use base column widths.
+			for ci := range cellWidths {
+				if ci < len(tl.ColWidths) {
+					cellWidths[ci] = tl.ColWidths[ci]
+				} else {
+					cellWidths[ci] = 50
+				}
+			}
+		}
+
 		x := marginLeft
 		for ci, cell := range row.Cells {
-			var cellW float64
-			if ci < len(tl.ColWidths) {
-				cellW = tl.ColWidths[ci]
-			} else if cell.W > 0 {
-				cellW = cell.W
-			} else {
-				cellW = 50
-			}
+			cellW := cellWidths[ci]
 
 			cellRect := Rect{X: x, Y: y - row.Height, W: cellW, H: row.Height}
 
@@ -103,39 +140,27 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				}
 			}
 
-			availW := cellW - cell.Style.Padding*2
-			if availW < 1 {
-				availW = 1
+			tx := x + cell.Style.Padding
+			switch cell.Style.Align {
+			case AlignCenter:
+				tx = x + cellW/2 - textWidth(cell.Text, cell.Style.FontSize)/2
+			case AlignRight:
+				tx = x + cellW - textWidth(cell.Text, cell.Style.FontSize) - cell.Style.Padding
 			}
-			lines := WrapText(cell.Text, cell.Style.FontSize, availW)
+			startY := y - row.Height + (row.Height-cell.Style.FontSize*1.2)/2
 
-			// Vertically center the text block within the cell.
-			totalTextH := float64(len(lines)) * cell.Style.FontSize * 1.2
-			textTop := y - row.Height + (row.Height-totalTextH)/2
-
-			for li, line := range lines {
-				tx := x + cell.Style.Padding
-				switch cell.Style.Align {
-				case AlignCenter:
-					tx = x + cellW/2 - textWidth(line, cell.Style.FontSize)/2
-				case AlignRight:
-					tx = x + cellW - textWidth(line, cell.Style.FontSize) - cell.Style.Padding
-				}
-				lineY := textTop + float64(li)*cell.Style.FontSize*1.2
-
-				textRun := TextRun{
-					Text:     line,
-					FontName: cell.Style.FontName,
-					FontSize: cell.Style.FontSize,
-					Color:    cell.Style.TextColor,
-					X:        tx,
-					Y:        lineY,
-				}
-				if textRun.Color == [3]float64{0, 0, 0} {
-					textRun.Color = cell.Style.TextColor
-				}
-				cb.PlaceText(textRun)
+			textRun := TextRun{
+				Text:     cell.Text,
+				FontName: cell.Style.FontName,
+				FontSize: cell.Style.FontSize,
+				Color:    cell.Style.TextColor,
+				X:        tx,
+				Y:        startY,
 			}
+			if textRun.Color == [3]float64{0, 0, 0} {
+				textRun.Color = cell.Style.TextColor
+			}
+			cb.PlaceText(textRun)
 
 			// Borders on top so they overlay cell content (images, fills, text).
 			drawSide(cb, cellRect, cell.Style.BorderLeft, "left")

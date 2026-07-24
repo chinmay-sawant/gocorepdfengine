@@ -244,11 +244,8 @@ func spacerLayout(height, contentW float64) *layout.TableLayout {
 	}
 }
 
-// resolveColWidths returns column widths for the table.
-// It scans all cells for explicit width values; if any column has an explicit width,
-// that width is used. Remaining columns are sized from relative weights scaled to
-// the leftover space. If no cell specifies a width, relative weights are scaled to
-// the full contentW.
+// resolveColWidths returns base column widths from table-level ColumnWidths.
+// Individual cell Width overrides are handled per-cell in the layout engine.
 func resolveColWidths(td *model.TableDef, contentW float64) []float64 {
 	weights := td.ColumnWidths
 	if len(weights) == 0 {
@@ -257,56 +254,7 @@ func resolveColWidths(td *model.TableDef, contentW float64) []float64 {
 			weights[i] = 1
 		}
 	}
-
-	// Scan all cells for explicit widths.
-	explicit := make(map[int]float64)
-	for _, r := range td.Rows {
-		for ci, c := range r.Row {
-			if c.Width > 0 {
-				if existing, ok := explicit[ci]; !ok || c.Width > existing {
-					explicit[ci] = c.Width
-				}
-			}
-		}
-	}
-
-	if len(explicit) == 0 {
-		scaleColsWeights(weights, contentW)
-		return weights
-	}
-
-	used := 0.0
-	for ci, w := range explicit {
-		if ci < len(weights) {
-			weights[ci] = w
-			used += w
-		}
-	}
-
-	// Scale remaining (non-explicit) columns to fill the leftover space.
-	remaining := contentW - used
-	var implicitSum float64
-	for ci, w := range weights {
-		if _, ok := explicit[ci]; !ok {
-			implicitSum += w
-		}
-	}
-	if implicitSum > 0 && remaining > 0 {
-		factor := remaining / implicitSum
-		for ci := range weights {
-			if _, ok := explicit[ci]; !ok {
-				weights[ci] *= factor
-			}
-		}
-	} else if remaining > 0 {
-		// All columns are explicit but total is less than contentW — distribute
-		// the leftover proportionally among all columns.
-		factor := contentW / used
-		for ci := range weights {
-			weights[ci] *= factor
-		}
-	}
-
+	scaleColsWeights(weights, contentW)
 	return weights
 }
 
