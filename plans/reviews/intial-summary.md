@@ -238,3 +238,19 @@ No HTML companion under `ponytail/`.
 /home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/improve-codebase-architecture/architecture-review-20260725-011032.html
 /home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/ponytail/ponytail-ultra-2026-07-25.md
 ```
+
+---
+
+## Codehound scan (2026-07-25)
+
+```
+./codehound . --no-fail --no-terminal --profile all --export-context --export-chunks --no-cache
+scanned 32 files (5850 lines) in 125.2ms
+  cache: 0 hits, 32 misses (full re-analysis)
+  skipped 388 files
+323 findings
+  severity: 2 high, 196 info, 68 low, 57 medium
+  top rules: BP-39 ×116, PERF-6 ×23, BP-27 ×17, PERF-35 ×17, BP-1 ×16
+  example findings: 21 (of 323 total)
+exported 323 context file(s) to scripts/findings/functions; exported 13 chunk file(s) to scripts/chunks
+```
