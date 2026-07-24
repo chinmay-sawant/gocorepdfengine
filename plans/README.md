@@ -17,3 +17,15 @@ Each phase is a **checklist plan** you can execute independently. Complete phase
 **Default compliant profile (end of phase 5):** PDF 2.0 + PDF/A-4 + PDF/UA-2.
 
 **Out of scope across all phases:** HTTP API, frontend, bindings, merge/redact product surface.
+
+## Compliance harness (ready now)
+
+Scripts live under [`../compliance/`](../compliance/) (ported from gopdfsuit):
+
+```bash
+make install-verapdf          # project-local veraPDF CLI
+make install-pdf-validators   # + avalpdf
+make test-verify-pdfs         # PDF/A-4 + PDF/UA-2 on compliance/fixtures/
+```
+
+See [`../compliance/README.md`](../compliance/README.md). Put golden/generated PDFs in `compliance/fixtures/`.
