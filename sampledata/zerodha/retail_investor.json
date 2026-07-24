@@ -16,6 +16,10 @@
     "code": "RS9988",
     "pan": "ABCDE1234F"
   },
+  "footer": {
+    "font": "Helvetica:8:000:center",
+    "text": "Zerodha Broking Ltd. | Contract Note - CN2024001 | Confidential"
+  },
   "digital_signature": {
     "enable": true,
     "reason": "I am the author of this document",

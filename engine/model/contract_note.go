@@ -17,6 +17,7 @@ type ContractNote struct {
 	Compliance *Compliance `json:"compliance,omitempty"`
 	Metadata   *Metadata   `json:"metadata,omitempty"`
 	Features   *Features   `json:"features,omitempty"`
+	Footer     *Footer     `json:"footer,omitempty"`
 
 	Client Client  `json:"client"`
 	Trades []Trade `json:"trades"`
@@ -48,6 +49,12 @@ type Features struct {
 	Bookmarks     bool   `json:"bookmarks"`
 	InternalLinks bool   `json:"internal_links"`
 	Watermark     string `json:"watermark"`
+}
+
+type Footer struct {
+	Font string `json:"font"`
+	Text string `json:"text"`
+	Link string `json:"link,omitempty"`
 }
 
 type Client struct {

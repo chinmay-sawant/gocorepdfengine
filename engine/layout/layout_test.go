@@ -21,8 +21,11 @@ func TestContentBuilder(t *testing.T) {
 	if !strings.Contains(output, "BT") {
 		t.Error("expected content stream to contain BT")
 	}
-	if !strings.Contains(output, "Hello World") {
-		t.Error("expected content stream to contain text")
+	if !strings.Contains(output, "Tj") {
+		t.Error("expected content stream to contain Tj operator")
+	}
+	if !strings.Contains(output, "<00480065006C006C006F00200057006F0072006C0064>") {
+		t.Error("expected content stream to contain hex-encoded text")
 	}
 }
 

@@ -15,6 +15,8 @@ Each phase is a **checklist plan** you can execute independently. Complete phase
 | 7 | [phase-07-optional-product-features.md](./phase-07-optional-product-features.md) | Sign, encrypt, forms | Separate product gates |
 | 8 | [phase-08-zerodha-benchmark.md](./phase-08-zerodha-benchmark.md) | Zerodha-style JSON→model→layout bench (cache on/off) | Local engine only |
 
+**Template field contract:** [guides/TEMPLATE_REFERENCE.md](../guides/TEMPLATE_REFERENCE.md) (full `config`/`elements` shape; phase 8 maps domain JSON → layout).
+
 **Default compliant profile (end of phase 5):** PDF 2.0 + PDF/A-4 + PDF/UA-2.
 
 **Out of scope:** HTTP API, frontend, bindings, **gopdfsuit as a dependency**, merge/redact product surface.

@@ -1,6 +1,10 @@
 package engine
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/chinmay/gocorepdfengine/engine/color"
 	"github.com/chinmay/gocorepdfengine/engine/content"
 	"github.com/chinmay/gocorepdfengine/engine/doc"
@@ -31,6 +35,7 @@ type DocumentConfig struct {
 	Lang          string
 	Pages         []PageContent
 	UsedText      string // characters for PDF/A subsetting
+	FooterText    string
 }
 
 // GenerateDocument assembles a multi-page PDF 2.0 document, optionally PDF/A-4 + PDF/UA-2.
@@ -141,7 +146,40 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	// === Content streams ===
 	for i, pc := range cfg.Pages {
 		streamBytes := pc.Stream
-		// Ensure layout font labels resolve: if stream uses /F1 we map F1 → shared font.
+		if cfg.FooterText != "" || len(cfg.Pages) > 1 {
+			var sb strings.Builder
+			pageNum := i + 1
+			totalPages := len(cfg.Pages)
+
+			if cfg.FooterText != "" {
+				sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
+				sb.WriteString(strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64))
+				sb.WriteString(" ")
+				sb.WriteString(strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64))
+				sb.WriteString(" Td <")
+				for _, r := range cfg.FooterText {
+					sb.WriteString(fmt.Sprintf("%04X", r))
+				}
+				sb.WriteString("> Tj ET\n")
+			}
+
+			pageStr := fmt.Sprintf("Page %d of %d", pageNum, totalPages)
+			sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
+			pageW := float64(len(pageStr)) * 8 * 0.55
+			rx := strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', -1, 64)
+			ry := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
+			sb.WriteString(rx)
+			sb.WriteString(" ")
+			sb.WriteString(ry)
+			sb.WriteString(" Td <")
+			for _, r := range pageStr {
+				sb.WriteString(fmt.Sprintf("%04X", r))
+			}
+			sb.WriteString("> Tj ET\n")
+
+			streamBytes = append([]byte{}, streamBytes...)
+			streamBytes = append(streamBytes, []byte(sb.String())...)
+		}
 		d.AddObjectAt(contentIDs[i], &write.Stream{
 			Dict: map[string]interface{}{"/Length": len(streamBytes)},
 			Data: streamBytes,
@@ -162,8 +200,8 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			for _, r := range cfg.UsedText {
 				loadedFont.AddChar(r)
 			}
-			// Also mark digits/common punctuation.
-			for _, r := range "0123456789.,:/-₹ " {
+			// Also mark letters, digits, and common punctuation.
+			for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |" {
 				loadedFont.AddChar(r)
 			}
 			libName := loadedFont.Name

@@ -51,6 +51,28 @@ func fmtFloat(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
+func textWidth(text string, fontSize float64) float64 {
+	return float64(len(text)) * fontSize * 0.55
+}
+
+func WrapText(text string, fontSize, maxWidth float64) []string {
+	if maxWidth <= 0 || textWidth(text, fontSize) <= maxWidth {
+		return []string{text}
+	}
+	var lines []string
+	runes := []rune(text)
+	start := 0
+	for start < len(runes) {
+		end := start + 1
+		for end <= len(runes) && textWidth(string(runes[start:end]), fontSize) <= maxWidth {
+			end++
+		}
+		lines = append(lines, string(runes[start:end-1]))
+		start = end - 1
+	}
+	return lines
+}
+
 func (cb *ContentBuilder) PlaceText(run TextRun) {
 	label, ok := cb.FontRes[run.FontName]
 	if !ok {
@@ -63,7 +85,7 @@ func (cb *ContentBuilder) PlaceText(run TextRun) {
 	cb.Stream.BT()
 	cb.Stream.Tf(label, run.FontSize)
 	cb.Stream.Td(run.X, run.Y)
-	cb.Stream.Tj(run.Text)
+	cb.Stream.TjCID(run.Text)
 	cb.Stream.ET()
 }
 
@@ -79,6 +101,25 @@ func (cb *ContentBuilder) DrawRect(r Rect, fill *[3]float64, border *BorderStyle
 		fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s re\n", fmtFloat(r.X), fmtFloat(r.Y), fmtFloat(r.W), fmtFloat(r.H))
 		cb.Stream.Buf.WriteString("S\n")
 	}
+}
+
+func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
+	label, ok := cb.FontRes["Helvetica"]
+	if !ok {
+		label = fmt.Sprintf("F%d", len(cb.FontRes)+1)
+		cb.FontRes["Helvetica"] = label
+		cb.UsedFonts["Helvetica"] = true
+	}
+	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg\n", fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85))
+	cb.Stream.BT()
+	cosA := 0.707
+	sinA := -0.707
+	fmt.Fprintf(&cb.Stream.Buf, "1 0 0 1 %s %s cm\n", fmtFloat(pageW/2), fmtFloat(pageH/2))
+	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s 0 0 cm\n", fmtFloat(cosA), fmtFloat(-sinA), fmtFloat(sinA), fmtFloat(cosA))
+	cb.Stream.Tf(label, 28)
+	fmt.Fprintf(&cb.Stream.Buf, "0 0 Td\n")
+	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
+	cb.Stream.ET()
 }
 
 func (cb *ContentBuilder) Bytes() []byte {

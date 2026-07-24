@@ -1,6 +1,10 @@
 {
   "document_type": "contract_note_hft",
   "performance_mode": "batch_processing",
+  "footer": {
+    "font": "Helvetica:8:000:center",
+    "text": "Zerodha Broking Ltd. | HFT Contract Note - Algo Capital LLP | Confidential"
+  },
   "client": {
     "name": "Algo Capital LLP",
     "code": "HFT001",

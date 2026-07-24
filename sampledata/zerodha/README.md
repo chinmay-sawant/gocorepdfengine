@@ -2,6 +2,11 @@
 
 No gopdfsuit dependency. Pipeline:
 
+**Full template field guide (target contract):** [guides/TEMPLATE_REFERENCE.md](../../guides/TEMPLATE_REFERENCE.md)  
+**Plan:** [plans/phase-08-zerodha-benchmark.md](../../plans/phase-08-zerodha-benchmark.md)
+
+These JSON files are **domain** fixtures (`client` / `trades`), not the full `config`/`elements` tree. Render maps them into layout tables that match the colors/structure described in the template reference.
+
 ```
 JSON templates  →  model.ContractNote  →  layout tables (theme colors)  →  engine.GenerateDocument
 ```

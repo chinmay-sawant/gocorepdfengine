@@ -36,7 +36,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	start := layout.NewContentBuilder(pageW, pageH)
 	if note.Watermark != "" {
-		placeWatermark(start, note.Watermark)
+		start.PlaceWatermark(note.Watermark, pageW, pageH)
 	}
 
 	builders, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
@@ -85,17 +85,25 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 		}
 	}
 
+	footerText := ""
+	if note.Footer != nil && note.Footer.Text != "" {
+		footerText = note.Footer.Text
+	}
+	used.WriteString(footerText)
+	used.WriteString("Page 000 of 000")
+
 	return engine.GenerateDocument(engine.DocumentConfig{
-		Width:    pageW,
-		Height:   pageH,
-		Mode:     mode,
-		Title:    title,
-		Author:   author,
-		Subject:  subject,
-		Creator:  "gocorepdfengine",
-		Lang:     "en-US",
-		Pages:    pages,
-		UsedText: used.String(),
+		Width:      pageW,
+		Height:     pageH,
+		Mode:       mode,
+		Title:      title,
+		Author:     author,
+		Subject:    subject,
+		Creator:    "gocorepdfengine",
+		Lang:       "en-US",
+		Pages:      pages,
+		UsedText:   used.String(),
+		FooterText: footerText,
 	})
 }
 
@@ -111,17 +119,6 @@ func scaleCols(tl *layout.TableLayout, contentW float64) {
 	for i := range tl.ColWidths {
 		tl.ColWidths[i] *= factor
 	}
-}
-
-func placeWatermark(cb *layout.ContentBuilder, text string) {
-	cb.PlaceText(layout.TextRun{
-		Text:     text,
-		FontName: font,
-		FontSize: 28,
-		Color:    [3]float64{0.85, 0.85, 0.85},
-		X:        pageW/2 - 80,
-		Y:        pageH / 2,
-	})
 }
 
 // BuildTable constructs the full visual table stack for a contract note.
@@ -235,7 +232,7 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 }
 
 func buildActive(note *model.ContractNote) *layout.TableLayout {
-	cols := []float64{2.5, 1, 1, 1.5, 1.5}
+	cols := []float64{3.5, 1, 1, 1.5, 1.5}
 	tl := &layout.TableLayout{ColWidths: cols}
 	bgH := color.ThemeHeaderBG
 	tl.Rows = append(tl.Rows, layout.Row{
@@ -316,7 +313,7 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 }
 
 func buildHFT(note *model.ContractNote) *layout.TableLayout {
-	cols := []float64{0.6, 1, 2, 0.8, 0.6, 1.5, 1.5}
+	cols := []float64{2, 1, 2, 0.8, 0.6, 2, 1}
 	tl := &layout.TableLayout{ColWidths: cols}
 	bgH := color.ThemeHeaderBG
 	tl.Rows = append(tl.Rows, layout.Row{

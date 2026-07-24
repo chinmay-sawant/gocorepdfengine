@@ -5,6 +5,10 @@
     "internal_links": true,
     "watermark": "CONFIDENTIAL"
   },
+  "footer": {
+    "font": "Helvetica:8:000:center",
+    "text": "Zerodha Broking Ltd. | Active Trader Note | Confidential"
+  },
   "client": {
     "name": "Priya Venkatesh",
     "code": "PV5544",
