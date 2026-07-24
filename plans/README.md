@@ -13,19 +13,20 @@ Each phase is a **checklist plan** you can execute independently. Complete phase
 | 5 | [phase-05-pdfua2-tagging.md](./phase-05-pdfua2-tagging.md) | PDF/UA-2 structure tree | **veraPDF `-f ua2`** |
 | 6 | [phase-06-performance-pooling.md](./phase-06-performance-pooling.md) | Speed / memory parity | Bench (after 4+5 green) |
 | 7 | [phase-07-optional-product-features.md](./phase-07-optional-product-features.md) | Sign, encrypt, forms | Separate product gates |
+| 8 | [phase-08-zerodha-benchmark.md](./phase-08-zerodha-benchmark.md) | Zerodha-style JSON→model→layout bench (cache on/off) | Local engine only |
 
 **Default compliant profile (end of phase 5):** PDF 2.0 + PDF/A-4 + PDF/UA-2.
 
-**Out of scope across all phases:** HTTP API, frontend, bindings, merge/redact product surface.
+**Out of scope:** HTTP API, frontend, bindings, **gopdfsuit as a dependency**, merge/redact product surface.
 
-## Compliance harness (ready now)
-
-Scripts live under [`../compliance/`](../compliance/) (ported from gopdfsuit):
+## Compliance + Zerodha harness
 
 ```bash
-make install-verapdf          # project-local veraPDF CLI
-make install-pdf-validators   # + avalpdf
-make test-verify-pdfs         # PDF/A-4 + PDF/UA-2 on compliance/fixtures/
+make install-verapdf
+make test-verify-pdfs
+make bench-zerodha              # cache ON
+make bench-zerodha-uncached     # rebuild model each iter
+make bench-zerodha-nocomply
 ```
 
-See [`../compliance/README.md`](../compliance/README.md). Put golden/generated PDFs in `compliance/fixtures/`.
+See [`../compliance/README.md`](../compliance/README.md) and [`../sampledata/zerodha/README.md`](../sampledata/zerodha/README.md).
