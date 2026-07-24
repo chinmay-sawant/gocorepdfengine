@@ -1,6 +1,6 @@
 # Phase 6 — Performance & Pooling
 
-**Status:** Not started  
+**Status:** ⏸️ NOT STARTED — deprioritized; Phase 4 + Phase 5 gates green  
 **Depends on:** Phase 4 + Phase 5 green (do not optimize non-compliant output)  
 **Base plan refs:** §5 Phase 1 buffer notes, §11 Phase F, HFT-scale lessons from gopdfsuit
 

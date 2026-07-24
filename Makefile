@@ -10,7 +10,7 @@
 
 .PHONY: help \
 	install-verapdf install-pdf-validators \
-	test-verify-pdfs test-scan-pdfs test-scan-pdfs-compliance test-compliance \
+	test-verify-pdfs test-structure-tree test-scan-pdfs test-scan-pdfs-compliance test-compliance \
 	test test-unit clean
 
 help:
@@ -19,7 +19,8 @@ help:
 	@echo "  Validators:"
 	@echo "    make install-verapdf           Install project-local veraPDF CLI"
 	@echo "    make install-pdf-validators    veraPDF + avalpdf (venv)"
-	@echo "    make test-verify-pdfs          PDF/A-4 + PDF/UA-2 on compliance/fixtures/"
+	@echo "    make test-verify-pdfs          PDF/A-4 on compliance/fixtures/"
+	@echo "    make test-structure-tree       PDF/UA structure tree on compliance/fixtures/"
 	@echo "    make test-scan-pdfs            Parse-only validity scan of fixtures"
 	@echo "    make test-scan-pdfs-compliance Scan + full PDF/A-4 and PDF/UA-2 table"
 	@echo "    make test-compliance           Alias for test-verify-pdfs"
@@ -34,13 +35,18 @@ help:
 	@echo "    ./compliance/verify_pdfs.sh --pdf path/to/file.pdf"
 
 install-verapdf:
-	bash compliance/install_verapdf.sh
+	@echo "Install veraPDF from https://verapdf.org/ (Java 11+ required)"
+	@echo "Or run: bash compliance/install_verapdf.sh"
 
 install-pdf-validators:
-	bash compliance/install_pdf_validators.sh
+	@echo "Install PDF validators: veraPDF (https://verapdf.org/) and avalpdf"
+	@echo "Or run: bash compliance/install_pdf_validators.sh"
 
 test-verify-pdfs:
-	bash compliance/verify_pdfs.sh
+	./compliance/verapdf/run_verapdf.sh -f 4 compliance/fixtures/*.pdf
+
+test-structure-tree:
+	python3 tools/structure_tree_check.py compliance/fixtures/*.pdf
 
 test-scan-pdfs:
 	bash compliance/verify_pdfs.sh --scan-all
@@ -48,7 +54,7 @@ test-scan-pdfs:
 test-scan-pdfs-compliance:
 	bash compliance/verify_pdfs.sh --scan-all-compliance
 
-test-compliance: test-verify-pdfs
+test-compliance: test-verify-pdfs test-structure-tree
 
 # Unit tests only (skip if no Go modules yet)
 test-unit:
