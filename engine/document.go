@@ -160,6 +160,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		}
 		if cfg.FooterText != "" || totalPages > 1 {
 			var buf bytes.Buffer
+			buf.Grow(256)
 			pageNum := i + 1
 			if isUA {
 				buf.WriteString("/Artifact BMC\n")

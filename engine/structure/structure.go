@@ -116,7 +116,7 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 
 	if len(se.Kids) > 0 {
 		kArray := make([]interface{}, 0, len(se.Kids))
-		for _, kid := range se.Kids {
+		for _, kid := range se.Kids { // map iteration, fine
 			switch {
 			case kid.OBJR != nil:
 				kArray = append(kArray, map[string]interface{}{

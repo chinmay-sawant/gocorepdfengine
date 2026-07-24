@@ -131,7 +131,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	}
 	var glyphs []glyphEntry
 
-	gidMap := make(map[uint16]uint16)
+	gidMap := make(map[uint16]uint16, len(gidList))
 	for newID, oldGID := range gidList {
 		gidMap[oldGID] = uint16(newID)
 	}
@@ -215,14 +215,11 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		}
 	}
 
-	var newHmtxData []byte
-	b := make([]byte, 2)
+	newHmtxData := make([]byte, 0, len(glyphs)*4)
+	var hmtxBuf [4]byte
 	for _, ge := range glyphs {
-		binary.BigEndian.PutUint16(b, ge.width)
-		newHmtxData = append(newHmtxData, b...)
-	}
-	for range glyphs {
-		newHmtxData = append(newHmtxData, b...)
+		binary.BigEndian.PutUint16(hmtxBuf[:2], ge.width)
+		newHmtxData = append(newHmtxData, hmtxBuf[:]...)
 	}
 
 	var newMaxpData []byte
@@ -244,7 +241,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		binary.BigEndian.PutUint16(newHeadData[50:], locaFormat)
 		binary.BigEndian.PutUint32(newHeadData[8:], 0)
 	} else {
-		return nil, fmt.Errorf("font: head table missing")
+		return nil, errors.New("font: head table missing")
 	}
 
 	var newHheaData []byte
@@ -253,7 +250,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		copy(newHheaData, hheaData)
 		binary.BigEndian.PutUint16(newHheaData[34:], newNumGlyphs)
 	} else {
-		return nil, fmt.Errorf("font: hhea table missing")
+		return nil, errors.New("font: hhea table missing")
 	}
 
 	var newCMapData []byte
@@ -358,7 +355,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 
 	dirBase := uint32(12)
 	for _, ti := range tableInfos {
-		copy(out[dirBase:], []byte(ti.tag))
+		copy(out[dirBase:], ti.tag)
 		binary.BigEndian.PutUint32(out[dirBase+8:], ti.offset)
 		binary.BigEndian.PutUint32(out[dirBase+12:], ti.length)
 		dirBase += 16

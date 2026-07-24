@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image/jpeg"
@@ -53,7 +54,7 @@ func cacheGet(key string) (*Image, bool) {
 
 func cacheKey(data []byte) string {
 	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h[:8]) // cold path (one-time per image)
+	return hex.EncodeToString(h[:8]) // cold path (one-time per image)
 }
 
 // Image represents a loaded image ready for PDF embedding.

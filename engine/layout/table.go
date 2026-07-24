@@ -81,6 +81,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 
 	var cellWidths []float64
 	for _, row := range tl.Rows {
+		cellsLen := len(row.Cells)
 		if y-row.Height < contentBottom {
 			cb = NewContentBuilder(pageW, pageH)
 			builders = append(builders, cb)
@@ -88,10 +89,10 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 		}
 
 		// Pre-compute effective cell widths for this row, ensuring total = contentW.
-		if cap(cellWidths) < len(row.Cells) {
-			cellWidths = make([]float64, len(row.Cells))
+		if cap(cellWidths) < cellsLen {
+			cellWidths = make([]float64, cellsLen)
 		} else {
-			cellWidths = cellWidths[:len(row.Cells)]
+			cellWidths = cellWidths[:cellsLen]
 			for i := range cellWidths {
 				cellWidths[i] = 0
 			}
@@ -106,7 +107,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 			}
 		}
 		switch {
-		case explicitCount == len(row.Cells) && explicitSum > 0:
+		case explicitCount == cellsLen && explicitSum > 0:
 			// All cells have explicit widths — scale to fill contentW.
 			scale := contentW / explicitSum
 			for ci := range cellWidths {
@@ -115,7 +116,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 		case explicitCount > 0 && explicitSum < contentW:
 			// Some cells have explicit widths — distribute remaining space equally.
 			remaining := contentW - explicitSum
-			implicitCount := len(row.Cells) - explicitCount
+			implicitCount := cellsLen - explicitCount
 			share := remaining / float64(implicitCount)
 			for ci := range cellWidths {
 				if cellWidths[ci] <= 0 {

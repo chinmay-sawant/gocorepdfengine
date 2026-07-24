@@ -20,7 +20,7 @@ var (
 )
 
 var zlibWriterPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
 			panic(err)

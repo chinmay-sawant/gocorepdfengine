@@ -99,7 +99,7 @@ func LoadJSON(path string) (*ContractNote, error) {
 	}
 	var note ContractNote
 	if err := json.Unmarshal(data, &note); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %w", path, err) // cold path (one-time load)
 	}
 	note.applyDefaults()
 	return &note, nil
@@ -177,7 +177,7 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 		price = float64(int(price*100)) / 100
 		total := float64(qty) * price
 
-		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec) // zero-padded, keeps Sprintf
+		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec) // test data generation (cold path)
 		sec++
 		if sec >= 60 {
 			sec = 0

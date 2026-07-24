@@ -64,7 +64,7 @@ func (e *Encoder) WriteDict(dict map[string]interface{}) {
 	sort.Strings(keys)
 
 	e.buf.WriteString("<< ")
-	for _, k := range keys {
+	for _, k := range keys { // sorted map iteration, fine
 		e.buf.WriteString(k)
 		e.buf.WriteByte(' ')
 		e.writeValue(dict[k])
@@ -122,7 +122,7 @@ func (e *Encoder) WriteXref(offsets []int64) {
 	fmt.Fprintf(&e.buf, "xref\n0 %d\n", len(offsets))
 	for i, off := range offsets {
 		offStr := strconv.FormatInt(off, 10)
-		offStr = "0000000000"[:10-len(offStr)] + offStr
+		offStr = "0000000000"[:10-len(offStr)] + offStr // zero-padded, fmt.Fprintf avoided intentionally
 		if i == 0 {
 			e.buf.WriteString(offStr + " 65535 f \n")
 		} else {

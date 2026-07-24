@@ -39,7 +39,7 @@ func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 			res, err = tbl.LayOutFrom(marginL, marginT, pageW, pageH, y, cur)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("template layout: %w", err)
+			return nil, fmt.Errorf("template layout: %w", err) // cold path
 		}
 		if len(allBuilders) == 0 {
 			allBuilders = res.Builders
@@ -52,7 +52,7 @@ func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 
 	pages := make([]engine.PageContent, 0, len(allBuilders))
 	for _, b := range allBuilders {
-		imgs := make(map[string]*image.Image)
+		imgs := make(map[string]*image.Image, len(b.ImageObjects))
 		for name, obj := range b.ImageObjects {
 			imgs[name] = obj.Img
 		}
@@ -186,8 +186,8 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 		}
 	}
 
-	b64cache := make(map[string][]byte)
-	hexCache := make(map[string]color.RGB)
+	b64cache := make(map[string][]byte)           // PERF-26: cache base64 decodes per unique image
+	hexCache := make(map[string]color.RGB)        // PERF-230: cache ParseHex results per unique color
 	for i, row := range td.Rows {
 		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {

@@ -2,7 +2,10 @@ package engine
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/zlib"
+	"io"
+	"sync"
 
 	"github.com/chinmay/gocorepdfengine/engine/color"
 	"github.com/chinmay/gocorepdfengine/engine/content"
@@ -15,9 +18,21 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+var zlibWriterPool = sync.Pool{
+	New: func() any {
+		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
+		if err != nil {
+			panic(err)
+		}
+		return w
+	},
+}
+
 func compressData(data []byte) []byte {
 	var buf bytes.Buffer
-	w := zlib.NewWriter(&buf)
+	w := zlibWriterPool.Get().(*zlib.Writer)
+	defer zlibWriterPool.Put(w)
+	w.Reset(&buf)
 	w.Write(data) //nolint: errcheck
 	w.Close()
 	return buf.Bytes()

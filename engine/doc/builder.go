@@ -142,7 +142,8 @@ func (d *Document) Build() []byte {
 			enc.Write(data) //nolint: errcheck
 			enc.WriteString("\n")
 		default:
-			fmt.Fprintf(enc, "%v\n", data)
+			enc.WriteString(fmt.Sprint(data))
+			enc.WriteString("\n")
 		}
 
 		enc.WriteString("endobj\n")
@@ -153,7 +154,7 @@ func (d *Document) Build() []byte {
 	if d.TrailerInfo != nil && !d.HasMode(ModePDFA4) {
 		infoRef = maxID + 1
 		objOffsets[infoRef] = int64(enc.Len())
-		fmt.Fprintf(enc, "%d 0 obj\n", infoRef)
+		enc.WriteString(strconv.Itoa(int(infoRef)) + " 0 obj\n")
 		enc.WriteDict(d.TrailerInfo)
 		enc.WriteString("\n")
 		enc.WriteString("endobj\n")

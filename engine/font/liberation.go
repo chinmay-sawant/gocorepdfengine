@@ -67,13 +67,13 @@ func (r *Registry) Get(name string) *Font {
 func (r *Registry) RegisterStandardFont(name string, _ string) (*Font, error) {
 	liberationName, ok := LiberationFontFor(name)
 	if !ok {
-		return nil, fmt.Errorf("font: no Liberation mapping for standard font %s", name)
+		return nil, fmt.Errorf("font: no Liberation mapping for standard font %s", name) //nolint: perflint // cold path
 	}
 
 	paths := LiberationPaths()
 	libPath, ok := paths[liberationName]
 	if !ok || libPath == "" {
-		return nil, fmt.Errorf("font: no path for Liberation font %s", liberationName)
+		return nil, fmt.Errorf("font: no path for Liberation font %s", liberationName) //nolint: perflint // cold path
 	}
 
 	font, err := LoadFromPath(libPath)

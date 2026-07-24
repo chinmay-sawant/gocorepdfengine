@@ -2,6 +2,7 @@ package font
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -51,7 +52,7 @@ func readTag(data []byte, off uint32) ([4]byte, uint32) {
 
 func findTable(data []byte, tableTag string) ([]byte, error) {
 	if len(data) < 12 {
-		return nil, fmt.Errorf("font: data too short for offset table")
+		return nil, errors.New("font: data too short for offset table")
 	}
 	numTables := binary.BigEndian.Uint16(data[4:])
 	dirOffset := uint32(12)
@@ -118,7 +119,7 @@ func LoadFromBytes(data []byte) (*Font, error) {
 		RawData:      data,
 		Glyphs:       make(map[rune]*Glyph, 256),
 		cmap:         make(map[rune]uint16),
-		glyphMetrics: make(map[uint16]*Glyph),
+		glyphMetrics: make(map[uint16]*Glyph, 256),
 	}
 
 	if err := parseHead(f, data); err != nil {
@@ -271,6 +272,7 @@ func parseCMap(f *Font, data []byte) error {
 	})
 
 	for _, c := range candidates {
+		// Each candidate has unique format/subtableData, so call cannot be hoisted
 		ok := parseCMapSubtable(f, c.format, c.subtableData)
 		if ok && len(f.cmap) > 0 {
 			return nil

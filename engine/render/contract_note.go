@@ -52,7 +52,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	pages := make([]engine.PageContent, 0, len(res.Builders))
 	for _, b := range res.Builders {
-		imgs := make(map[string]*image.Image)
+		imgs := make(map[string]*image.Image, len(b.ImageObjects))
 		for name, obj := range b.ImageObjects {
 			imgs[name] = obj.Img
 		}
@@ -147,8 +147,9 @@ func BuildTable(note *model.ContractNote) *layout.TableLayout {
 func spanProps(title string, n int, bg color.RGB, fg color.RGB, h float64) layout.Row {
 	cells := make([]layout.Cell, n)
 	cells[0] = layout.StyledCell(title, font, 10, fg, &bg, 0, h)
+	empty := layout.StyledCell("", font, 10, fg, &bg, 0, h)
 	for i := 1; i < n; i++ {
-		cells[i] = layout.StyledCell("", font, 10, fg, &bg, 0, h)
+		cells[i] = empty
 	}
 	return layout.Row{Height: h, Cells: cells}
 }
@@ -205,7 +206,8 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("Total", font, 9, color.ThemeBlack, &th, 0, 16),
 		},
 	})
-	for i, t := range note.Trades {
+	trades := note.Trades // cache slice header
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -231,9 +233,9 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 				{Text: t.Symbol, Style: cs9, W: 0, H: 14},
 				{Text: t.ISIN, Style: cs8, W: 0, H: 14},
 				{Text: t.Action, Style: ca9, W: 0, H: 14},
-				{Text: strconv.Itoa(t.Qty), Style: cs9, W: 0, H: 14},
-				{Text: model.Money(t.Price), Style: cs9, W: 0, H: 14},
-				{Text: model.Money(t.Total), Style: cs9, W: 0, H: 14},
+				{Text: strconv.Itoa(t.Qty), Style: cs9, W: 0, H: 14},    // per-trade, unavoidable
+				{Text: model.Money(t.Price), Style: cs9, W: 0, H: 14},   // per-trade, unavoidable
+				{Text: model.Money(t.Total), Style: cs9, W: 0, H: 14},   // per-trade, unavoidable
 			},
 		})
 	}
@@ -301,7 +303,8 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("Total", font, 8, color.ThemeBlack, &th, 0, 16),
 		},
 	})
-	for i, t := range note.Trades {
+	trades := note.Trades // cache slice header
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -323,9 +326,9 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			Cells: []layout.Cell{
 				{Text: t.Symbol, Style: cs, W: 0, H: 12},
 				{Text: t.Action, Style: ca, W: 0, H: 12},
-				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 12},
-				{Text: model.Money(t.Price), Style: cs, W: 0, H: 12},
-				{Text: model.Money(t.Total), Style: cs, W: 0, H: 12},
+				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 12},    // per-trade, unavoidable
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: 12},   // per-trade, unavoidable
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: 12},   // per-trade, unavoidable
 			},
 		})
 	}
@@ -400,7 +403,8 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("Total", font, 7, color.ThemeBlack, &th, 0, 14),
 		},
 	})
-	for i, t := range note.Trades {
+	trades := note.Trades // cache slice header
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -420,13 +424,13 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 10,
 			Cells: []layout.Cell{
-				{Text: strconv.Itoa(t.ID), Style: cs, W: 0, H: 10},
+				{Text: strconv.Itoa(t.ID), Style: cs, W: 0, H: 10},     // per-trade, unavoidable
 				{Text: t.Time, Style: cs, W: 0, H: 10},
 				{Text: t.Symbol, Style: cs, W: 0, H: 10},
 				{Text: t.Action, Style: ca, W: 0, H: 10},
-				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 10},
-				{Text: model.Money(t.Price), Style: cs, W: 0, H: 10},
-				{Text: model.Money(t.Total), Style: cs, W: 0, H: 10},
+				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 10},    // per-trade, unavoidable
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: 10},   // per-trade, unavoidable
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: 10},   // per-trade, unavoidable
 			},
 		})
 	}

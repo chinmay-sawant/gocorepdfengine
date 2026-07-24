@@ -52,7 +52,8 @@ func (f *Font) ToUnicodeCMap() []byte {
 	appendStr(strconv.Itoa(len(ranges)) + " beginbfrange\n")
 
 	for _, r := range ranges {
-		appendStr(fmt.Sprintf("<%04X> <%04X> <%04X>\n", r.startCID, r.endCID, r.startCID)) // hex formatting keeps Sprintf
+		// Sprintf used for padded hex (%04X); manual hex formatting would be more verbose without measurable gain
+		appendStr(fmt.Sprintf("<%04X> <%04X> <%04X>\n", r.startCID, r.endCID, r.startCID))
 	}
 
 	appendStr("endbfrange\n")

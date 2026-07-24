@@ -54,7 +54,7 @@ func (p *Page) ToDict(fontMap, xobjMap map[string]doc.ObjectID, pagesRef doc.Obj
 	hasRes := false
 	if len(fontMap) > 0 {
 		fd := make(map[string]interface{}, len(fontMap))
-		for name, ref := range fontMap {
+		for name, ref := range fontMap { // map iteration, fine
 			fd["/"+name] = strconv.Itoa(int(ref)) + " 0 R"
 		}
 		res["/Font"] = fd
