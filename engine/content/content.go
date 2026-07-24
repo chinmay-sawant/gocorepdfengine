@@ -10,8 +10,8 @@ import (
 )
 
 var flateWriterPool = sync.Pool{
-	New: func() any {
-		w, _ := flate.NewWriter(nil, flate.BestSpeed) //nolint: errcheck — BestSpeed is always valid
+	New: func() any { // returns *flate.Writer
+		w, _ := flate.NewWriter(nil, flate.BestSpeed) //nolint: errcheck
 		return w
 	},
 }
@@ -105,6 +105,7 @@ func (s *Stream) Tm(a, b, c, d, e, f float64) {
 func (s *Stream) TL(leading float64) {
 	fmt.Fprintf(&s.Buf, "%s TL\n", fmtFloat(leading))
 }
+
 // S strokes the path.
 func (s *Stream) S() {
 	s.Buf.WriteString("S\n")
@@ -164,11 +165,11 @@ func (s *Stream) Compress() error {
 	var compressed bytes.Buffer
 	w := flateWriterPool.Get().(*flate.Writer)
 	w.Reset(&compressed)
-	if _, err := w.Write(s.Buf.Bytes()); err != nil {
+	if _, err := w.Write(s.Buf.Bytes()); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
 		return fmt.Errorf("content: compress: %w", err)
 	}
-	if err := w.Close(); err != nil {
+	if err := w.Close(); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
 		return fmt.Errorf("content: compress: %w", err)
 	}

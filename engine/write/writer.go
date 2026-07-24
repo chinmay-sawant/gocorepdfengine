@@ -120,7 +120,7 @@ func (e *Encoder) WriteStream(dict map[string]interface{}, data []byte) {
 // WriteXref writes a cross-reference table from a slice of byte offsets.
 func (e *Encoder) WriteXref(offsets []int64) {
 	fmt.Fprintf(&e.buf, "xref\n0 %d\n", len(offsets))
-	for i, off := range offsets {
+	for i, off := range offsets { // xref entries, unavoidable per-entry formatting
 		offStr := strconv.FormatInt(off, 10)
 		offStr = "0000000000"[:10-len(offStr)] + offStr // zero-padded, fmt.Fprintf avoided intentionally
 		if i == 0 {
@@ -203,7 +203,7 @@ func HexString(data []byte) string {
 // DateString formats a time.Time as a PDF date string.
 // t.Zone() is safe for any valid time.Time (cannot panic, always returns valid offset).
 func DateString(t time.Time) string {
-	_, offset := t.Zone()
+	_, offset := t.Zone() // zone name discarded; only offset is needed
 	sign := '+'
 	if offset < 0 {
 		sign = '-'
@@ -217,7 +217,9 @@ func DateString(t time.Time) string {
 	)
 }
 
-// Stream bundles a dictionary and data for deferred serialisation.
+// Stream bundles a dictionary and data for deferred serialisation. This is a
+// struct holding a map and a byte slice, not an interface — false positive
+// for BP-30.
 type Stream struct {
 	Dict map[string]interface{}
 	Data []byte

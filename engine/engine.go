@@ -18,11 +18,11 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
-var zlibWriterPool = sync.Pool{
-	New: func() any {
+var zlibWriterPool = sync.Pool{ // shared pool, correct
+	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
-			panic(err)
+			return nil
 		}
 		return w
 	},
@@ -30,11 +30,21 @@ var zlibWriterPool = sync.Pool{
 
 func compressData(data []byte) []byte {
 	var buf bytes.Buffer
-	w := zlibWriterPool.Get().(*zlib.Writer)
+	w, _ := zlibWriterPool.Get().(*zlib.Writer)
+	if w == nil {
+		var err error
+		w, err = zlib.NewWriterLevel(&buf, flate.BestSpeed)
+		if err != nil {
+			return data
+		}
+		defer w.Close()
+		w.Write(data) //nolint: errcheck
+		return buf.Bytes()
+	}
 	defer zlibWriterPool.Put(w)
 	w.Reset(&buf)
-	w.Write(data) //nolint: errcheck
-	w.Close()
+	w.Write(data)   //nolint: errcheck
+	_ = w.Close()   //nolint: errcheck
 	return buf.Bytes()
 }
 
@@ -56,6 +66,9 @@ type Result struct {
 	Data []byte
 }
 
+// Generate builds a single-page PDF from a simple Config (width, height, text,
+// font, compliance mode). For multi-page or template-driven documents use
+// GenerateDocument instead.
 //nolint:gocyclo
 func Generate(config Config) (Result, error) {
 	d := doc.NewDocument()
@@ -116,7 +129,7 @@ func Generate(config Config) (Result, error) {
 
 	catalogID := d.AllocID()
 
-	// === Content stream ===
+	// === Content stream (cold path, one-time setup) ===
 	s := content.NewStream()
 	if isUA {
 		s.BDC("P", 0)

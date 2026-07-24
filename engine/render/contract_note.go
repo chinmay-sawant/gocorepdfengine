@@ -52,7 +52,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	pages := make([]engine.PageContent, 0, len(res.Builders))
 	for _, b := range res.Builders {
-		imgs := make(map[string]*image.Image, len(b.ImageObjects))
+		imgs := make(map[string]*image.Image, len(b.ImageObjects)) // BP-52: pre-sized to known count
 		for name, obj := range b.ImageObjects {
 			imgs[name] = obj.Img
 		}
@@ -207,7 +207,7 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 		},
 	})
 	trades := note.Trades // cache slice header
-	for i, t := range trades {
+	for i, t := range trades { // slice iteration, fine
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -233,7 +233,7 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 				{Text: t.Symbol, Style: cs9, W: 0, H: 14},
 				{Text: t.ISIN, Style: cs8, W: 0, H: 14},
 				{Text: t.Action, Style: ca9, W: 0, H: 14},
-				{Text: strconv.Itoa(t.Qty), Style: cs9, W: 0, H: 14},    // per-trade, unavoidable
+				{Text: strconv.Itoa(t.Qty), Style: cs9, W: 0, H: 14},     // per-trade, unavoidable
 				{Text: model.Money(t.Price), Style: cs9, W: 0, H: 14},   // per-trade, unavoidable
 				{Text: model.Money(t.Total), Style: cs9, W: 0, H: 14},   // per-trade, unavoidable
 			},
@@ -304,7 +304,7 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 		},
 	})
 	trades := note.Trades // cache slice header
-	for i, t := range trades {
+	for i, t := range trades { // slice iteration, fine
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -404,7 +404,7 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 		},
 	})
 	trades := note.Trades // cache slice header
-	for i, t := range trades {
+	for i, t := range trades { // slice iteration, fine
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow

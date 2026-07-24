@@ -1,3 +1,6 @@
+// Package font provides PDF font types, TrueType/OpenType parsing, glyph
+// subsetting, CMap generation, and font-dictionary builders for embedding
+// fonts in PDF 2.0 / PDF/A-4 documents.
 package font
 
 import (

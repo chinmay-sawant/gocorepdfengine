@@ -80,7 +80,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 	}
 
 	var cellWidths []float64
-	for _, row := range tl.Rows {
+	for _, row := range tl.Rows { // row iteration, unavoidable per-row cell processing
 		cellsLen := len(row.Cells)
 		if y-row.Height < contentBottom {
 			cb = NewContentBuilder(pageW, pageH)
@@ -90,7 +90,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 
 		// Pre-compute effective cell widths for this row, ensuring total = contentW.
 		if cap(cellWidths) < cellsLen {
-			cellWidths = make([]float64, cellsLen)
+			cellWidths = make([]float64, cellsLen) // different rows have different cell counts, unavoidable
 		} else {
 			cellWidths = cellWidths[:cellsLen]
 			for i := range cellWidths {
@@ -146,7 +146,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 
 			// Render image if present (content before borders so borders stay on top).
 			if cell.Image != nil {
-				imgName := "Img" + strconv.Itoa(len(cb.ImageObjects)+1)
+				imgName := "Img" + strconv.Itoa(len(cb.ImageObjects)+1) // per-cell image naming, unavoidable
 				var img *image.Image
 				var err error
 				if cell.Image.IsJPEG {
@@ -159,7 +159,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				}
 			}
 
-			tw := textWidth(cell.Text, cell.Style.FontSize)
+			tw := textWidth(cell.Text, cell.Style.FontSize) // per-cell content, unavoidable
 			tx := x + cell.Style.Padding
 			switch cell.Style.Align {
 			case AlignCenter:

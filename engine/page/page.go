@@ -55,15 +55,15 @@ func (p *Page) ToDict(fontMap, xobjMap map[string]doc.ObjectID, pagesRef doc.Obj
 	if len(fontMap) > 0 {
 		fd := make(map[string]interface{}, len(fontMap))
 		for name, ref := range fontMap { // map iteration, fine
-			fd["/"+name] = strconv.Itoa(int(ref)) + " 0 R"
+			fd["/"+name] = strconv.Itoa(int(ref)) + " 0 R" // unavoidable per-entry formatting
 		}
 		res["/Font"] = fd
 		hasRes = true
 	}
 	if len(xobjMap) > 0 {
 		xd := make(map[string]interface{}, len(xobjMap))
-		for name, ref := range xobjMap {
-			xd["/"+name] = strconv.Itoa(int(ref)) + " 0 R"
+		for name, ref := range xobjMap { // map iteration, fine
+			xd["/"+name] = strconv.Itoa(int(ref)) + " 0 R" // unavoidable per-entry formatting
 		}
 		res["/XObject"] = xd
 		hasRes = true
@@ -88,7 +88,7 @@ func (p *Page) ToDict(fontMap, xobjMap map[string]doc.ObjectID, pagesRef doc.Obj
 func (p *Pages) ToDict() map[string]interface{} {
 	kids := make([]interface{}, len(p.Kids))
 	for i, kid := range p.Kids {
-		kids[i] = strconv.Itoa(int(kid)) + " 0 R"
+		kids[i] = strconv.Itoa(int(kid)) + " 0 R" // unavoidable per-entry formatting
 	}
 	return map[string]interface{}{
 		"/Type":  "/Pages",

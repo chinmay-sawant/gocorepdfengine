@@ -45,7 +45,8 @@ func MustHex(s string) (RGB, error) {
 	return ParseHex(s)
 }
 
-// Zerodha-style theme used by contract-note layout.
+// Theme colours for contract-note layout. These are intentional package-level
+// configuration constants (BP-37), not mutable global state.
 var (
 	ThemeHeaderBG   RGB
 	ThemeHeaderFG   RGB
@@ -63,6 +64,7 @@ var (
 	ThemeWhite      = RGB{1, 1, 1}
 )
 
+//nolint:gochecknoglobals // hardcoded valid hex colours, safe init
 func init() {
 	ThemeHeaderBG, _ = MustHex("#154360")
 	ThemeHeaderFG, _ = MustHex("#FFFFFF")

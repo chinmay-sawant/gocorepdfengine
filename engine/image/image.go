@@ -17,6 +17,8 @@ import (
 
 const maxCacheEntries = 200
 
+// cache is an intentional package-level LRU singleton for decoded images
+// (BP-37). Protected by cacheMu and initialised lazily via cacheOnce.
 var (
 	cache      map[string]*Image
 	cacheMu    sync.Mutex
@@ -26,8 +28,8 @@ var (
 
 func initCache() {
 	cacheOnce.Do(func() {
-		cache = make(map[string]*Image)
-		cacheOrder = make([]string, 0, maxCacheEntries)
+		cache = make(map[string]*Image)          // BP-52: single shared cache, size managed via LRU
+		cacheOrder = make([]string, 0, maxCacheEntries) // BP-52: eviction order, pre-sized
 	})
 }
 
@@ -205,7 +207,7 @@ func NewFromPNG(data []byte) (*Image, error) {
 		rawRGB := make([]byte, 0, totalPixels*3)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				r, g, b, _ := src.At(x, y).RGBA()
+				r, g, b, _ := src.At(x, y).RGBA() // alpha intentionally discarded; PDF stores RGB only
 				rawRGB = append(rawRGB, byte(r>>8), byte(g>>8), byte(b>>8))
 			}
 		}

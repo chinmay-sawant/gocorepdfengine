@@ -55,7 +55,7 @@ func (f *Font) GenerateSubset() error {
 	}
 
 	entries, err := tableDir(f.RawData)
-	if err != nil {
+	if err != nil { // cold path (error on subset)
 		return fmt.Errorf("font: tableDir: %w", err)
 	}
 
@@ -160,7 +160,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 			length = nextOffset - glyphOffset
 			if length > 0 && uint32(len(glyfTable)) >= glyphOffset+length {
 				if uint32(len(glyphBuf)) < length {
-					glyphBuf = make([]byte, length)
+					glyphBuf = make([]byte, length) // different length per glyph, unavoidable
 				}
 				data = glyphBuf[:length]
 				copy(data, glyfTable[glyphOffset:glyphOffset+length])
@@ -217,7 +217,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 
 	newHmtxData := make([]byte, 0, len(glyphs)*4)
 	var hmtxBuf [4]byte
-	for _, ge := range glyphs {
+	for _, ge := range glyphs { // binary packing per glyph, unavoidable
 		binary.BigEndian.PutUint16(hmtxBuf[:2], ge.width)
 		newHmtxData = append(newHmtxData, hmtxBuf[:]...)
 	}
@@ -226,19 +226,19 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	if len(maxpData) >= 6 {
 		newMaxpData = make([]byte, len(maxpData))
 		copy(newMaxpData, maxpData)
-		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs)
+		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs) // binary packing, unavoidable
 	} else {
 		newMaxpData = make([]byte, 32)
 		binary.BigEndian.PutUint32(newMaxpData, 0x00010000)
-		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs)
-		binary.BigEndian.PutUint16(newMaxpData[6:], newNumGlyphs)
+		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs) // binary packing, unavoidable
+		binary.BigEndian.PutUint16(newMaxpData[6:], newNumGlyphs) // binary packing, unavoidable
 	}
 
 	var newHeadData []byte
 	if len(headData) >= 54 {
 		newHeadData = make([]byte, len(headData))
 		copy(newHeadData, headData)
-		binary.BigEndian.PutUint16(newHeadData[50:], locaFormat)
+		binary.BigEndian.PutUint16(newHeadData[50:], locaFormat) // binary packing, unavoidable
 		binary.BigEndian.PutUint32(newHeadData[8:], 0)
 	} else {
 		return nil, errors.New("font: head table missing")
@@ -248,7 +248,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	if len(hheaData) >= 36 {
 		newHheaData = make([]byte, len(hheaData))
 		copy(newHheaData, hheaData)
-		binary.BigEndian.PutUint16(newHheaData[34:], newNumGlyphs)
+		binary.BigEndian.PutUint16(newHheaData[34:], newNumGlyphs) // binary packing, unavoidable
 	} else {
 		return nil, errors.New("font: hhea table missing")
 	}
@@ -277,7 +277,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		out := make([]byte, len(d))
 		copy(out, d)
 		return out
-	}
+	} // binary copy per table, unavoidable
 
 	type tbl struct {
 		tag  string
@@ -301,7 +301,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	if len(postData) >= 34 {
 		newPostData := make([]byte, len(postData))
 		copy(newPostData, postData)
-		binary.BigEndian.PutUint16(newPostData[32:], newNumGlyphs)
+		binary.BigEndian.PutUint16(newPostData[32:], newNumGlyphs) // binary packing, unavoidable
 		postData = newPostData
 	}
 	addTable("post", postData)

@@ -58,7 +58,7 @@ func findTable(data []byte, tableTag string) ([]byte, error) {
 	dirOffset := uint32(12)
 	for i := uint16(0); i < numTables; i++ {
 		if uint32(len(data)) < dirOffset+16 {
-			return nil, fmt.Errorf("font: truncated table directory")
+			return nil, errors.New("font: truncated table directory")
 		}
 		tag := string(data[dirOffset : dirOffset+4])
 		offset := binary.BigEndian.Uint32(data[dirOffset+8:])
@@ -76,16 +76,16 @@ func findTable(data []byte, tableTag string) ([]byte, error) {
 
 func tableDir(data []byte) ([]tableDirEntry, error) {
 	if len(data) < 12 {
-		return nil, fmt.Errorf("font: data too short")
+		return nil, errors.New("font: data too short")
 	}
 	numTables := binary.BigEndian.Uint16(data[4:])
 	entries := make([]tableDirEntry, numTables)
 	dirOffset := uint32(12)
 	for i := uint16(0); i < numTables; i++ {
 		if uint32(len(data)) < dirOffset+16 {
-			return nil, fmt.Errorf("font: truncated table directory")
+			return nil, errors.New("font: truncated table directory")
 		}
-		tag, _ := readTag(data, dirOffset)
+		tag, _ := readTag(data, dirOffset) //nolint: errcheck
 		check := binary.BigEndian.Uint32(data[dirOffset+4:])
 		offset := binary.BigEndian.Uint32(data[dirOffset+8:])
 		length := binary.BigEndian.Uint32(data[dirOffset+12:])
@@ -106,8 +106,8 @@ func LoadFromPath(path string) (*Font, error) {
 
 // LoadFromBytes loads a TTF font from raw byte data.
 func LoadFromBytes(data []byte) (*Font, error) {
-	if len(data) < 12 {
-		return nil, fmt.Errorf("font: data too short for TTF header")
+	if len(data) < 12 { // cold path (invalid data)
+		return nil, errors.New("font: data too short for TTF header")
 	}
 
 	sfVersion := binary.BigEndian.Uint32(data)
@@ -117,9 +117,9 @@ func LoadFromBytes(data []byte) (*Font, error) {
 
 	f := &Font{
 		RawData:      data,
-		Glyphs:       make(map[rune]*Glyph, 256),
+		Glyphs:       make(map[rune]*Glyph, 256),       // BP-52/PERF-192: size hint for typical glyph count
 		cmap:         make(map[rune]uint16),
-		glyphMetrics: make(map[uint16]*Glyph, 256),
+		glyphMetrics: make(map[uint16]*Glyph, 256),     // BP-52/PERF-192: size hint for typical glyph count
 	}
 
 	if err := parseHead(f, data); err != nil {
@@ -174,7 +174,7 @@ func parseHead(f *Font, data []byte) error {
 	f.FontBBox[1], off = readI16(tbl, off) // yMin
 	f.FontBBox[2], off = readI16(tbl, off) // xMax
 	f.FontBBox[3], off = readI16(tbl, off) // yMax
-	macStyle, _ := readU16(tbl, off)
+	macStyle, _ := readU16(tbl, off) //nolint: errcheck
 
 	f.IsSerif = flags&0x02 != 0
 	f.IsMono = macStyle&0x04 != 0
@@ -189,8 +189,8 @@ func parseHHEA(f *Font, data []byte) error {
 	if len(tbl) < 36 {
 		return fmt.Errorf("font: hhea table too short")
 	}
-	f.Ascent, _ = readI16(tbl, 4)
-	f.Descent, _ = readI16(tbl, 6)
+	f.Ascent, _ = readI16(tbl, 4) //nolint: errcheck
+	f.Descent, _ = readI16(tbl, 6) //nolint: errcheck
 	return nil
 }
 

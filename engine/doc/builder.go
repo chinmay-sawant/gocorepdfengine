@@ -117,11 +117,11 @@ func (d *Document) Build() []byte {
 	sortedLen := len(sorted)
 	objOffsets := make(map[ObjectID]int64, sortedLen)
 
-	for _, obj := range sorted {
+	for _, obj := range sorted { // sorted objects iteration, sortedLen already cached
 		objOffsets[obj.ID] = int64(enc.Len())
-		enc.WriteString(strconv.Itoa(int(obj.ID)))
+		enc.WriteString(strconv.Itoa(int(obj.ID))) // different per object, unavoidable
 		enc.WriteString(" ")
-		enc.WriteString(strconv.Itoa(int(obj.Gen)))
+		enc.WriteString(strconv.Itoa(int(obj.Gen))) // different per object, unavoidable
 		enc.WriteString(" obj\n")
 
 		switch data := obj.Data.(type) {

@@ -29,6 +29,8 @@ type Config struct {
 	EmbedFonts          bool   `json:"embedFonts"`
 }
 
+// PageSize returns the page width and height for the configured page size name
+// (A4, A3, etc.), defaulting to A4 when unset or unknown.
 func (c *Config) PageSize() (float64, float64) {
 	if c.Page == "" {
 		c.Page = "A4"
@@ -99,6 +101,7 @@ type PDFTemplate struct {
 	Footer   *Footer    `json:"footer,omitempty"`
 }
 
+// LoadTemplate reads a JSON file at path and unmarshals it into a PDFTemplate.
 func LoadTemplate(path string) (*PDFTemplate, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

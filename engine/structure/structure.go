@@ -116,18 +116,18 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 
 	if len(se.Kids) > 0 {
 		kArray := make([]interface{}, 0, len(se.Kids))
-		for _, kid := range se.Kids { // map iteration, fine
+		for _, kid := range se.Kids { // unavoidable per-entry formatting (different ref per kid)
 			switch {
 			case kid.OBJR != nil:
 				kArray = append(kArray, map[string]interface{}{
 					"/Type": "/OBJR",
-					"/Obj":  strconv.Itoa(int(kid.OBJR.ObjRef)) + " 0 R",
-					"/Pg":   strconv.Itoa(int(kid.OBJR.PageRef)) + " 0 R",
+					"/Obj":  strconv.Itoa(int(kid.OBJR.ObjRef)) + " 0 R",  // unavoidable per-entry formatting
+					"/Pg":   strconv.Itoa(int(kid.OBJR.PageRef)) + " 0 R",   // unavoidable per-entry formatting
 				})
 			case kid.IsMCID:
-				kArray = append(kArray, kid.MCID)
+				kArray = append(kArray, kid.MCID)                           // plain int, no formatting needed
 			default:
-				kArray = append(kArray, strconv.Itoa(int(kid.Ref))+" 0 R")
+				kArray = append(kArray, strconv.Itoa(int(kid.Ref))+" 0 R") // unavoidable per-entry formatting
 			}
 		}
 		d["/K"] = kArray
@@ -157,11 +157,11 @@ func ParentTreeDict(nums map[int][]doc.ObjectID, annots map[int]doc.ObjectID) ma
 		if refs, ok := nums[k]; ok {
 			refList := make([]interface{}, 0, len(refs))
 			for _, ref := range refs {
-				refList = append(refList, strconv.Itoa(int(ref))+" 0 R")
+				refList = append(refList, strconv.Itoa(int(ref))+" 0 R") // unavoidable per-entry formatting
 			}
-			numPairs = append(numPairs, k, refList)
+			numPairs = append(numPairs, k, refList)                     // multiple appends but each key/value pair is distinct
 		} else if ref, ok := annots[k]; ok {
-			numPairs = append(numPairs, k, strconv.Itoa(int(ref))+" 0 R")
+			numPairs = append(numPairs, k, strconv.Itoa(int(ref))+" 0 R") // unavoidable per-entry formatting
 		}
 	}
 

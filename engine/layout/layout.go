@@ -59,7 +59,7 @@ func NewContentBuilder(width, height float64) *ContentBuilder {
 		Stream:       content.NewStream(),
 		FontRes:      make(map[string]string),
 		UsedFonts:    make(map[string]bool),
-		ImageObjects: make(map[string]*ImageObj),
+		ImageObjects: make(map[string]*ImageObj, 8), // BP-52: size hint for expected images
 		MCID:         0,
 		Width:        width,
 		Height:       height,

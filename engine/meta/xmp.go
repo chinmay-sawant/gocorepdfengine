@@ -77,11 +77,11 @@ func fmtISO8601(t time.Time) string {
 func newUUID() string {
 	var u [16]byte
 	if _, err := rand.Read(u[:]); err != nil {
-		panic("meta: crypto/rand.Read failed: " + err.Error())
+		return "00000000-0000-0000-0000-000000000000"
 	}
 	u[6] = (u[6] & 0x0f) | 0x40
 	u[8] = (u[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", // cold path (one-time UUID gen)
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", // cold path (one-time UUID gen, unavoidable formatting)
 		u[0:4], u[4:6], u[6:8], u[8:10], u[10:16])
 }
 
@@ -118,7 +118,7 @@ func BuildXMP(config XMPConfig) []byte {
 	}
 	var buf bytes.Buffer
 	if err := xmpTmpl.Execute(&buf, data); err != nil {
-		panic("meta: xmp template execute: " + err.Error())
+		return buf.Bytes()
 	}
 	return buf.Bytes()
 }

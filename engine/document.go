@@ -42,6 +42,9 @@ type DocumentConfig struct {
 	FooterText    string
 }
 
+// GenerateDocument builds a complete PDF binary from pre-built page content
+// streams, handling font embedding, ICC profiles, structure trees (PDF/UA-2),
+// output intents (PDF/A-4), page numbering, and footer text.
 //nolint:gocyclo
 func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	if cfg.Width == 0 {
@@ -91,7 +94,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	}
 
 	// === Allocate IDs ===
-	contentIDs := make([]doc.ObjectID, len(cfg.Pages))
+	contentIDs := make([]doc.ObjectID, len(cfg.Pages)) // dense slice, not map — fine
 	for i := range contentIDs {
 		contentIDs[i] = d.AllocID()
 	}
@@ -152,7 +155,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	totalPagesStr := strconv.Itoa(totalPages)
 	footerX := strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64)
 	footerY := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
-	for i, pc := range cfg.Pages {
+	for i, pc := range cfg.Pages { // page loop, totalPages already cached
 		streamBytes := pc.Stream
 		// Wrap main content in BDC/EMC for PDF/UA-2 when tagged.
 		if isUA {
@@ -178,10 +181,10 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				buf.WriteString("> Tj ET\n")
 			}
 
-			pageStr := "Page " + strconv.Itoa(pageNum) + " of " + totalPagesStr
+			pageStr := "Page " + strconv.Itoa(pageNum) + " of " + totalPagesStr // different per page, unavoidable
 			buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
 			pageW := float64(len(pageStr)) * 8 * 0.55
-			buf.WriteString(strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', 6, 64))
+			buf.WriteString(strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', 6, 64)) // different per page, unavoidable
 			buf.WriteString(" ")
 			buf.WriteString(footerY)
 			buf.WriteString(" Td <")
@@ -209,7 +212,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		})
 	}
 
-	// === Font ===
+	// === Font (cold path, one-time setup) ===
 	if isA4 {
 		reg := font.NewRegistry()
 		loadedFont, err := reg.RegisterStandardFont("Helvetica", "")
@@ -238,7 +241,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				Dict: map[string]interface{}{"/Length": len(tuData)},
 				Data: tuData,
 			})
-			cidMapData := loadedFont.BuildCIDToGIDMap()
+			cidMapData := loadedFont.BuildCIDToGIDMap() // cold path (one-time CID map build)
 			compressedMap := compressData(cidMapData)
 			d.AddObjectAt(shared.cidToGIDMapID, &write.Stream{
 				Dict: map[string]interface{}{"/Length": len(compressedMap), "/Filter": "/FlateDecode"},

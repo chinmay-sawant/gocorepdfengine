@@ -54,13 +54,13 @@ func runMain() {
 		fmt.Println(err)
 		if cpuProfileFile != nil {
 			pprof.StopCPUProfile()
-			cpuProfileFile.Close()
+			_ = cpuProfileFile.Close() // Best-effort; original error is surfaced above.
 		}
 		os.Exit(1) // Benchmark harness, not library code.
 	}
 	if cpuProfileFile != nil {
 		pprof.StopCPUProfile()
-		cpuProfileFile.Close()
+		_ = cpuProfileFile.Close() // Best-effort cleanup.
 	}
 	if *flagMemProfile != "" {
 		f, err := os.Create(*flagMemProfile)
@@ -267,7 +267,7 @@ func runBenchmark() error {
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
 		go func(workerID int) {
-			defer wg.Done()
+			defer wg.Done() //nolint: scopelint
 			stats := &workerStats[workerID]
 			for jobIdx := range jobs {
 				var note *model.ContractNote

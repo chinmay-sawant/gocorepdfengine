@@ -13,6 +13,8 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
 
+// TemplatePDF renders a model.PDFTemplate (tables, title, images, watermark)
+// into a multi-page PDF binary by driving engine.GenerateDocument.
 func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 	pageW, pageH := pageDimensions(t.Config)
 	contentW := pageW - marginL - marginR
@@ -150,7 +152,7 @@ func titleLayout(title *model.Title, contentW float64) *layout.TableLayout {
 		}
 	}
 
-	p, _ := layout.ParseProps(title.Props)
+	p, _ := layout.ParseProps(title.Props) //nolint: errcheck
 	rowH := p.FontSize*2 + 12
 	if rowH < 36 {
 		rowH = 36
@@ -186,7 +188,7 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 		}
 	}
 
-	b64cache := make(map[string][]byte)           // PERF-26: cache base64 decodes per unique image
+	b64cache := make(map[string][]byte, 8)        // PERF-26: cache base64 decodes per unique image (size hint for expected images)
 	hexCache := make(map[string]color.RGB)        // PERF-230: cache ParseHex results per unique color
 	for i, row := range td.Rows {
 		rowH := 0.0
@@ -204,13 +206,13 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 
 		r := layout.Row{Height: rowH}
 		for _, c := range row.Row {
-			p, _ := layout.ParseProps(c.Props)
+			p, _ := layout.ParseProps(c.Props) //nolint: errcheck
 			var fill *color.RGB
 			if c.BGColor != "" {
 				parsed, ok := hexCache[c.BGColor]
 				if !ok {
 					var err error
-					parsed, err = color.ParseHex(c.BGColor)
+					parsed, err = color.ParseHex(c.BGColor) // hexCache miss, parse once
 					if err == nil {
 						hexCache[c.BGColor] = parsed
 					}
@@ -224,7 +226,7 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 				parsed, ok := hexCache[c.TextColor]
 				if !ok {
 					var err error
-					parsed, err = color.ParseHex(c.TextColor)
+					parsed, err = color.ParseHex(c.TextColor) // hexCache miss, parse once
 					if err == nil {
 						hexCache[c.TextColor] = parsed
 					}
@@ -233,12 +235,12 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 			} else if defaultTC != [3]float64{} {
 				tc = defaultTC
 			}
-			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
+			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH) // per-cell props, unavoidable
 			if c.Image != nil && c.Image.ImageData != "" {
 				raw, ok := b64cache[c.Image.ImageData]
 				if !ok {
 					var err error
-					raw, err = base64.StdEncoding.DecodeString(c.Image.ImageData)
+					raw, err = base64.StdEncoding.DecodeString(c.Image.ImageData) // b64cache miss, decode once
 					if err != nil || len(raw) == 0 {
 						r.Cells = append(r.Cells, lc)
 						continue

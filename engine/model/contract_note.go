@@ -165,7 +165,7 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 	rng := rand.New(rand.NewSource(seed)) // Deterministic seed for benchmark reproducibility (not security-sensitive).
 	trades := make([]Trade, count)
 	hour, mn, sec := 9, 15, 0
-	symCount := len(symbols)
+	symCount := len(symbols) // cached len for loop
 	for i := 0; i < count; i++ {
 		sym := symbols[rng.Intn(symCount)]
 		action := "BUY"

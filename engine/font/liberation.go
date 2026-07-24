@@ -49,7 +49,7 @@ type Registry struct {
 // NewRegistry creates a new font registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		fonts: make(map[string]*Font),
+		fonts: make(map[string]*Font, 12), // BP-52: size hint for expected std fonts
 	}
 }
 

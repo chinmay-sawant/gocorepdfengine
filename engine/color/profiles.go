@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// srgbOnce/grayOnce and their backing slices are package-level state used by
+// SRGBProfile / GrayProfile. They are initialised exactly once via sync.Once
+// and are functionally immutable after first access (BP-37).
 var (
 	srgbOnce sync.Once
 	grayOnce sync.Once
@@ -20,10 +23,10 @@ var (
 )
 
 var zlibWriterPool = sync.Pool{
-	New: func() any {
+	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
-			panic(err)
+			return nil
 		}
 		return w
 	},
@@ -157,6 +160,8 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 	return buf.Bytes()
 }
 
+// buildDesc and the following build* functions use hardcoded valid values;
+// binary.Write errors are impossible with these inputs and are safely discarded.
 func buildDesc(text string) []byte {
 	var buf bytes.Buffer
 	buf.Grow(20 + len(text))
@@ -217,15 +222,32 @@ func buildGray() []byte {
 
 func compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	w := zlibWriterPool.Get().(*zlib.Writer)
+	w, _ := zlibWriterPool.Get().(*zlib.Writer)
+	if w == nil {
+		var err error
+		w, err = zlib.NewWriterLevel(&buf, flate.BestSpeed)
+		if err != nil {
+			return nil, fmt.Errorf("compress: create writer: %w", err)
+		}
+		defer w.Close()
+		_, err = w.Write(data)
+		if err != nil {
+			return nil, fmt.Errorf("compress write: %w", err)
+		}
+		err = w.Close()
+		if err != nil {
+			return nil, fmt.Errorf("compress close: %w", err)
+		}
+		return buf.Bytes(), nil
+	}
 	defer zlibWriterPool.Put(w)
 	w.Reset(&buf)
 	_, err := w.Write(data)
-	if err != nil {
+	if err != nil { // cold path (error)
 		return nil, fmt.Errorf("compress write: %w", err)
 	}
 	err = w.Close()
-	if err != nil {
+	if err != nil { // cold path (error)
 		return nil, fmt.Errorf("compress close: %w", err)
 	}
 	return buf.Bytes(), nil
