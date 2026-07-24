@@ -206,8 +206,9 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("Total", font, 9, color.ThemeBlack, &th, 0, 16),
 		},
 	})
-	trades := note.Trades // cache slice header
-	for i, t := range trades { // slice iteration, fine
+	trades := note.Trades
+	var tradeBuf []byte
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -227,15 +228,16 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 		}
 		ca9 := cs9
 		ca9.TextColor = [3]float64(afg)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.Qty), 10)
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 14,
 			Cells: []layout.Cell{
 				{Text: t.Symbol, Style: cs9, W: 0, H: 14},
 				{Text: t.ISIN, Style: cs8, W: 0, H: 14},
 				{Text: t.Action, Style: ca9, W: 0, H: 14},
-				{Text: strconv.Itoa(t.Qty), Style: cs9, W: 0, H: 14},     // per-trade, unavoidable
-				{Text: model.Money(t.Price), Style: cs9, W: 0, H: 14},   // per-trade, unavoidable
-				{Text: model.Money(t.Total), Style: cs9, W: 0, H: 14},   // per-trade, unavoidable
+				{Text: string(tradeBuf), Style: cs9, W: 0, H: 14},
+				{Text: model.Money(t.Price), Style: cs9, W: 0, H: 14},
+				{Text: model.Money(t.Total), Style: cs9, W: 0, H: 14},
 			},
 		})
 	}
@@ -303,8 +305,9 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("Total", font, 8, color.ThemeBlack, &th, 0, 16),
 		},
 	})
-	trades := note.Trades // cache slice header
-	for i, t := range trades { // slice iteration, fine
+	trades := note.Trades
+	var tradeBuf []byte
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -321,14 +324,15 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 		}
 		ca := cs
 		ca.TextColor = [3]float64(afg)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.Qty), 10)
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 12,
 			Cells: []layout.Cell{
 				{Text: t.Symbol, Style: cs, W: 0, H: 12},
 				{Text: t.Action, Style: ca, W: 0, H: 12},
-				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 12},    // per-trade, unavoidable
-				{Text: model.Money(t.Price), Style: cs, W: 0, H: 12},   // per-trade, unavoidable
-				{Text: model.Money(t.Total), Style: cs, W: 0, H: 12},   // per-trade, unavoidable
+				{Text: string(tradeBuf), Style: cs, W: 0, H: 12},
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: 12},
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: 12},
 			},
 		})
 	}
@@ -403,8 +407,9 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("Total", font, 7, color.ThemeBlack, &th, 0, 14),
 		},
 	})
-	trades := note.Trades // cache slice header
-	for i, t := range trades { // slice iteration, fine
+	trades := note.Trades
+	var tradeBuf []byte
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
@@ -421,16 +426,19 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 		}
 		ca := cs
 		ca.TextColor = [3]float64(afg)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.ID), 10)
+		idStr := string(tradeBuf)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.Qty), 10)
 		tl.Rows = append(tl.Rows, layout.Row{
 			Height: 10,
 			Cells: []layout.Cell{
-				{Text: strconv.Itoa(t.ID), Style: cs, W: 0, H: 10},     // per-trade, unavoidable
+				{Text: idStr, Style: cs, W: 0, H: 10},
 				{Text: t.Time, Style: cs, W: 0, H: 10},
 				{Text: t.Symbol, Style: cs, W: 0, H: 10},
 				{Text: t.Action, Style: ca, W: 0, H: 10},
-				{Text: strconv.Itoa(t.Qty), Style: cs, W: 0, H: 10},    // per-trade, unavoidable
-				{Text: model.Money(t.Price), Style: cs, W: 0, H: 10},   // per-trade, unavoidable
-				{Text: model.Money(t.Total), Style: cs, W: 0, H: 10},   // per-trade, unavoidable
+				{Text: string(tradeBuf), Style: cs, W: 0, H: 10},
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: 10},
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: 10},
 			},
 		})
 	}

@@ -137,13 +137,21 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	}
 	f.SubGIDMap = gidMap
 
-	var glyphBuf []byte
+	type glyphInfo struct {
+		gid    uint16
+		offset uint32
+		length uint32
+		width  uint16
+	}
+	infos := make([]glyphInfo, 0, len(gidList))
+	var totalGlyphSize uint32
+
 	for _, oldGID := range gidList {
-		var data []byte
 		var length uint32
+		var glyphOffset uint32
 
 		if glyfTable != nil && locaTable != nil {
-			var glyphOffset, nextOffset uint32
+			var nextOffset uint32
 			if locaFormat == 0 {
 				off := uint32(oldGID) * 2
 				if uint32(len(locaTable)) >= off+4 {
@@ -159,11 +167,9 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 			}
 			length = nextOffset - glyphOffset
 			if length > 0 && uint32(len(glyfTable)) >= glyphOffset+length {
-				if uint32(len(glyphBuf)) < length {
-					glyphBuf = make([]byte, length) // different length per glyph, unavoidable
-				}
-				data = glyphBuf[:length]
-				copy(data, glyfTable[glyphOffset:glyphOffset+length])
+				totalGlyphSize += pad4(length)
+			} else {
+				length = 0
 			}
 		}
 
@@ -176,33 +182,47 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 			}
 		}
 
-		glyphs = append(glyphs, glyphEntry{
-			gid: oldGID, data: data, length: length, width: width,
+		infos = append(infos, glyphInfo{
+			gid: oldGID, offset: glyphOffset, length: length, width: width,
 		})
+	}
+
+	glyphDataBuf := make([]byte, totalGlyphSize)
+	var dataOffset uint32
+	for _, info := range infos {
+		var data []byte
+		if info.length > 0 {
+			data = glyphDataBuf[dataOffset : dataOffset+info.length]
+			copy(data, glyfTable[info.offset:info.offset+info.length])
+		}
+		glyphs = append(glyphs, glyphEntry{
+			gid: info.gid, data: data, length: info.length, width: info.width,
+		})
+		dataOffset += pad4(info.length)
 	}
 
 	newNumGlyphs := uint16(len(glyphs))
 
 	var newLocaData []byte
 	if locaFormat == 0 {
-		b := make([]byte, 4)
 		var glyphOffset uint32
-		for i, ge := range glyphs {
-			binary.BigEndian.PutUint16(b[0:], uint16(glyphOffset/2))
+		for _, ge := range glyphs {
+			v := uint16(glyphOffset / 2)
+			newLocaData = append(newLocaData, byte(v>>8), byte(v))
 			glyphOffset += pad4(ge.length)
-			binary.BigEndian.PutUint16(b[2:], uint16(glyphOffset/2))
-			newLocaData = append(newLocaData, b...)
-			_ = i
+			v = uint16(glyphOffset / 2)
+			newLocaData = append(newLocaData, byte(v>>8), byte(v))
 		}
 	} else {
-		b := make([]byte, 8)
 		var glyphOffset uint32
-		for i, ge := range glyphs {
-			binary.BigEndian.PutUint32(b[0:], glyphOffset)
+		for _, ge := range glyphs {
+			newLocaData = append(newLocaData,
+				byte(glyphOffset>>24), byte(glyphOffset>>16),
+				byte(glyphOffset>>8), byte(glyphOffset))
 			glyphOffset += pad4(ge.length)
-			binary.BigEndian.PutUint32(b[4:], glyphOffset)
-			newLocaData = append(newLocaData, b...)
-			_ = i
+			newLocaData = append(newLocaData,
+				byte(glyphOffset>>24), byte(glyphOffset>>16),
+				byte(glyphOffset>>8), byte(glyphOffset))
 		}
 	}
 
@@ -216,30 +236,38 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	}
 
 	newHmtxData := make([]byte, 0, len(glyphs)*4)
-	var hmtxBuf [4]byte
-	for _, ge := range glyphs { // binary packing per glyph, unavoidable
-		binary.BigEndian.PutUint16(hmtxBuf[:2], ge.width)
-		newHmtxData = append(newHmtxData, hmtxBuf[:]...)
+	for _, ge := range glyphs {
+		newHmtxData = append(newHmtxData, byte(ge.width>>8), byte(ge.width), 0, 0)
 	}
 
 	var newMaxpData []byte
 	if len(maxpData) >= 6 {
 		newMaxpData = make([]byte, len(maxpData))
 		copy(newMaxpData, maxpData)
-		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs) // binary packing, unavoidable
+		newMaxpData[4] = byte(newNumGlyphs >> 8)
+		newMaxpData[5] = byte(newNumGlyphs)
 	} else {
 		newMaxpData = make([]byte, 32)
-		binary.BigEndian.PutUint32(newMaxpData, 0x00010000)
-		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs) // binary packing, unavoidable
-		binary.BigEndian.PutUint16(newMaxpData[6:], newNumGlyphs) // binary packing, unavoidable
+		newMaxpData[0] = 0
+		newMaxpData[1] = 0
+		newMaxpData[2] = 1
+		newMaxpData[3] = 0
+		newMaxpData[4] = byte(newNumGlyphs >> 8)
+		newMaxpData[5] = byte(newNumGlyphs)
+		newMaxpData[6] = byte(newNumGlyphs >> 8)
+		newMaxpData[7] = byte(newNumGlyphs)
 	}
 
 	var newHeadData []byte
 	if len(headData) >= 54 {
 		newHeadData = make([]byte, len(headData))
 		copy(newHeadData, headData)
-		binary.BigEndian.PutUint16(newHeadData[50:], locaFormat) // binary packing, unavoidable
-		binary.BigEndian.PutUint32(newHeadData[8:], 0)
+		newHeadData[50] = byte(locaFormat >> 8)
+		newHeadData[51] = byte(locaFormat)
+		newHeadData[8] = 0
+		newHeadData[9] = 0
+		newHeadData[10] = 0
+		newHeadData[11] = 0
 	} else {
 		return nil, errors.New("font: head table missing")
 	}
@@ -248,7 +276,8 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	if len(hheaData) >= 36 {
 		newHheaData = make([]byte, len(hheaData))
 		copy(newHheaData, hheaData)
-		binary.BigEndian.PutUint16(newHheaData[34:], newNumGlyphs) // binary packing, unavoidable
+		newHheaData[34] = byte(newNumGlyphs >> 8)
+		newHheaData[35] = byte(newNumGlyphs)
 	} else {
 		return nil, errors.New("font: hhea table missing")
 	}
@@ -257,27 +286,31 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	{
 		usedChars := f.UsedChars()
 		subtable := buildFormat4CMap(usedChars, gidMap)
-		// Wrap in cmap table header (version + numTables + encoding record)
 		headerLen := uint32(4 + 8)
 		cmap := make([]byte, headerLen+uint32(len(subtable)))
-		binary.BigEndian.PutUint16(cmap, 0)      // version
-		binary.BigEndian.PutUint16(cmap[2:], 1)   // numTables
-		binary.BigEndian.PutUint16(cmap[4:], 3)   // platformID = Microsoft
-		binary.BigEndian.PutUint16(cmap[6:], 1)   // encodingID = Unicode BMP
-		binary.BigEndian.PutUint32(cmap[8:], headerLen) // offset to subtable
+		cmap[0] = 0
+		cmap[1] = 0
+		cmap[2] = 0
+		cmap[3] = 1
+		cmap[4] = 0
+		cmap[5] = 3
+		cmap[6] = 0
+		cmap[7] = 1
+		cmap[8] = byte(headerLen >> 24)
+		cmap[9] = byte(headerLen >> 16)
+		cmap[10] = byte(headerLen >> 8)
+		cmap[11] = byte(headerLen)
 		copy(cmap[headerLen:], subtable)
 		newCMapData = cmap
 	}
 
-	copyTable := func(tag string) []byte {
+	findTableData := func(tag string) []byte {
 		d, err := findTable(orig, tag)
 		if err != nil {
 			return nil
 		}
-		out := make([]byte, len(d))
-		copy(out, d)
-		return out
-	} // binary copy per table, unavoidable
+		return d
+	}
 
 	type tbl struct {
 		tag  string
@@ -294,14 +327,15 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	addTable("head", newHeadData)
 	addTable("hhea", newHheaData)
 	addTable("maxp", newMaxpData)
-	addTable("OS/2", copyTable("OS/2"))
-	addTable("name", copyTable("name"))
+	addTable("OS/2", findTableData("OS/2"))
+	addTable("name", findTableData("name"))
 	addTable("cmap", newCMapData)
-	postData := copyTable("post")
+	postData := findTableData("post")
 	if len(postData) >= 34 {
 		newPostData := make([]byte, len(postData))
 		copy(newPostData, postData)
-		binary.BigEndian.PutUint16(newPostData[32:], newNumGlyphs) // binary packing, unavoidable
+		newPostData[32] = byte(newNumGlyphs >> 8)
+		newPostData[33] = byte(newNumGlyphs)
 		postData = newPostData
 	}
 	addTable("post", postData)
@@ -309,12 +343,12 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	addTable("glyf", newGlyfData)
 	addTable("hmtx", newHmtxData)
 
-	cvt := copyTable("cvt ")
+	cvt := findTableData("cvt ")
 	if cvt == nil {
-		cvt = copyTable("cvt")
+		cvt = findTableData("cvt")
 	}
-	addTable("prep", copyTable("prep"))
-	addTable("fpgm", copyTable("fpgm"))
+	addTable("prep", findTableData("prep"))
+	addTable("fpgm", findTableData("fpgm"))
 	addTable("cvt ", cvt)
 
 	numTables := uint16(len(tables))
@@ -327,11 +361,18 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	rangeShift := numTables*16 - searchRange
 
 	header := make([]byte, 12)
-	binary.BigEndian.PutUint32(header, 0x00010000)
-	binary.BigEndian.PutUint16(header[4:], numTables)
-	binary.BigEndian.PutUint16(header[6:], searchRange)
-	binary.BigEndian.PutUint16(header[8:], entrySelector)
-	binary.BigEndian.PutUint16(header[10:], rangeShift)
+	header[0] = 0
+	header[1] = 0
+	header[2] = 1
+	header[3] = 0
+	header[4] = byte(numTables >> 8)
+	header[5] = byte(numTables)
+	header[6] = byte(searchRange >> 8)
+	header[7] = byte(searchRange)
+	header[8] = byte(entrySelector >> 8)
+	header[9] = byte(entrySelector)
+	header[10] = byte(rangeShift >> 8)
+	header[11] = byte(rangeShift)
 
 	type tableInfo struct {
 		tag    string
@@ -356,8 +397,14 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	dirBase := uint32(12)
 	for _, ti := range tableInfos {
 		copy(out[dirBase:], ti.tag)
-		binary.BigEndian.PutUint32(out[dirBase+8:], ti.offset)
-		binary.BigEndian.PutUint32(out[dirBase+12:], ti.length)
+		out[dirBase+8] = byte(ti.offset >> 24)
+		out[dirBase+9] = byte(ti.offset >> 16)
+		out[dirBase+10] = byte(ti.offset >> 8)
+		out[dirBase+11] = byte(ti.offset)
+		out[dirBase+12] = byte(ti.length >> 24)
+		out[dirBase+13] = byte(ti.length >> 16)
+		out[dirBase+14] = byte(ti.length >> 8)
+		out[dirBase+15] = byte(ti.length)
 		dirBase += 16
 	}
 
@@ -370,7 +417,10 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	adjustment := uint32(0xB1B0AFBA) - checksum
 	headOff := findTableOffset(out, "head")
 	if headOff != 0 {
-		binary.BigEndian.PutUint32(out[headOff+8:], adjustment)
+		out[headOff+8] = byte(adjustment >> 24)
+		out[headOff+9] = byte(adjustment >> 16)
+		out[headOff+10] = byte(adjustment >> 8)
+		out[headOff+11] = byte(adjustment)
 	}
 
 	return out, nil
@@ -464,44 +514,58 @@ func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
 
 	data := make([]byte, totalLength)
 
-	binary.BigEndian.PutUint16(data, 4)
-	binary.BigEndian.PutUint16(data[2:], totalLength)
-	binary.BigEndian.PutUint16(data[4:], 0)
+	data[0] = 0
+	data[1] = 4
+	data[2] = byte(totalLength >> 8)
+	data[3] = byte(totalLength)
+	data[4] = 0
+	data[5] = 0
 	segCountX2 := uint16(segCount) * 2
-	binary.BigEndian.PutUint16(data[6:], segCountX2)
+	data[6] = byte(segCountX2 >> 8)
+	data[7] = byte(segCountX2)
 
 	srEntrySelector := uint16(0)
 	for 1<<(srEntrySelector+1) <= uint16(segCount) {
 		srEntrySelector++
 	}
 	srSearchRangeBytes := uint16(1 << srEntrySelector) * 2
-	binary.BigEndian.PutUint16(data[8:], srSearchRangeBytes)
-	binary.BigEndian.PutUint16(data[10:], srEntrySelector)
-	binary.BigEndian.PutUint16(data[12:], uint16(segCount)*2-srSearchRangeBytes)
+	data[8] = byte(srSearchRangeBytes >> 8)
+	data[9] = byte(srSearchRangeBytes)
+	data[10] = byte(srEntrySelector >> 8)
+	data[11] = byte(srEntrySelector)
+	v := uint16(segCount)*2 - srSearchRangeBytes
+	data[12] = byte(v >> 8)
+	data[13] = byte(v)
 
 	off := uint16(14)
 	for i := 0; i < segCount; i++ {
-		binary.BigEndian.PutUint16(data[off:], endCodes[i])
+		data[off] = byte(endCodes[i] >> 8)
+		data[off+1] = byte(endCodes[i])
 		off += 2
 	}
-	binary.BigEndian.PutUint16(data[off:], 0)
+	data[off] = 0
+	data[off+1] = 0
 	off += 2
 	for i := 0; i < segCount; i++ {
-		binary.BigEndian.PutUint16(data[off:], startCodes[i])
+		data[off] = byte(startCodes[i] >> 8)
+		data[off+1] = byte(startCodes[i])
 		off += 2
 	}
 	for i := 0; i < segCount; i++ {
-		binary.BigEndian.PutUint16(data[off:], uint16(idDeltas[i]))
+		data[off] = byte(uint16(idDeltas[i]) >> 8)
+		data[off+1] = byte(uint16(idDeltas[i]))
 		off += 2
 	}
 
 	for i := 0; i < segCount; i++ {
-		binary.BigEndian.PutUint16(data[off:], 0)
+		data[off] = 0
+		data[off+1] = 0
 		off += 2
 	}
 
 	for _, gid := range glyphIDArray {
-		binary.BigEndian.PutUint16(data[off:], gid)
+		data[off] = byte(gid >> 8)
+		data[off+1] = byte(gid)
 		off += 2
 	}
 
@@ -513,18 +577,30 @@ func buildEmptyFormat4CMap() []byte {
 	segCountX2 := segCount * 2
 	totalLength := uint16(14 + 2 + 2 + 2 + 2 + 0)
 	data := make([]byte, totalLength)
-	binary.BigEndian.PutUint16(data, 4)
-	binary.BigEndian.PutUint16(data[2:], totalLength)
-	binary.BigEndian.PutUint16(data[4:], 0)
-	binary.BigEndian.PutUint16(data[6:], segCountX2)
-	binary.BigEndian.PutUint16(data[8:], 2)
-	binary.BigEndian.PutUint16(data[10:], 0)
-	binary.BigEndian.PutUint16(data[12:], 0)
-	binary.BigEndian.PutUint16(data[14:], 0xFFFF)
-	binary.BigEndian.PutUint16(data[16:], 0)
-	binary.BigEndian.PutUint16(data[18:], 0xFFFF)
-	binary.BigEndian.PutUint16(data[20:], 1)
-	binary.BigEndian.PutUint16(data[22:], 0)
+	data[0] = 0
+	data[1] = 4
+	data[2] = byte(totalLength >> 8)
+	data[3] = byte(totalLength)
+	data[4] = 0
+	data[5] = 0
+	data[6] = byte(segCountX2 >> 8)
+	data[7] = byte(segCountX2)
+	data[8] = 0
+	data[9] = 2
+	data[10] = 0
+	data[11] = 0
+	data[12] = 0
+	data[13] = 0
+	data[14] = 0xFF
+	data[15] = 0xFF
+	data[16] = 0
+	data[17] = 0
+	data[18] = 0xFF
+	data[19] = 0xFF
+	data[20] = 0
+	data[21] = 1
+	data[22] = 0
+	data[23] = 0
 	return data
 }
 

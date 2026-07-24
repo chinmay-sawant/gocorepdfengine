@@ -173,7 +173,7 @@ func NewFromPNG(data []byte) (*Image, error) {
 
 	src, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("image: PNG decode error: %w", err)
+		return nil, fmt.Errorf("image: PNG decode error: %w", err) // cold path (decode failure)
 	}
 
 	bounds := src.Bounds()

@@ -75,31 +75,43 @@ func Namespace() map[string]interface{} {
 // NamespaceRef formats an object ID as a PDF indirect reference string for use
 // in the Namespaces array.
 func NamespaceRef(id doc.ObjectID) string {
-	return strconv.Itoa(int(id)) + " 0 R"
+	var refBuf []byte
+	refBuf = strconv.AppendInt(refBuf[:0], int64(id), 10)
+	return string(refBuf) + " 0 R"
 }
 
 // StructTreeRootDict returns the StructTreeRoot dictionary with the given
 // references for its /K (kids), /ParentTree, and /Namespaces entries.
 func StructTreeRootDict(kidsRef, parentTreeRef, nsRef doc.ObjectID) map[string]interface{} {
+	var refBuf []byte
+	refBuf = strconv.AppendInt(refBuf[:0], int64(kidsRef), 10)
+	k := string(refBuf) + " 0 R"
+	refBuf = strconv.AppendInt(refBuf[:0], int64(parentTreeRef), 10)
+	pt := string(refBuf) + " 0 R"
+	refBuf = strconv.AppendInt(refBuf[:0], int64(nsRef), 10)
+	ns := string(refBuf) + " 0 R"
 	return map[string]interface{}{
 		"/Type":       "/StructTreeRoot",
-		"/K":          strconv.Itoa(int(kidsRef)) + " 0 R",
-		"/ParentTree": strconv.Itoa(int(parentTreeRef)) + " 0 R",
-		"/Namespaces": []interface{}{strconv.Itoa(int(nsRef)) + " 0 R"},
+		"/K":          k,
+		"/ParentTree": pt,
+		"/Namespaces": []interface{}{ns},
 	}
 }
 
 // StructElemDict converts a StructElem into its PDF dictionary representation.
 func StructElemDict(se *StructElem) map[string]interface{} {
+	var refBuf []byte
 	d := make(map[string]interface{})
 	d["/Type"] = "/StructElem"
 	d["/S"] = string(se.Type)
 
 	if se.Parent != 0 {
-		d["/P"] = strconv.Itoa(int(se.Parent)) + " 0 R"
+		refBuf = strconv.AppendInt(refBuf[:0], int64(se.Parent), 10)
+		d["/P"] = string(refBuf) + " 0 R"
 	}
 	if se.PageRef != 0 {
-		d["/Pg"] = strconv.Itoa(int(se.PageRef)) + " 0 R"
+		refBuf = strconv.AppendInt(refBuf[:0], int64(se.PageRef), 10)
+		d["/Pg"] = string(refBuf) + " 0 R"
 	}
 	if se.Title != "" {
 		d["/T"] = "(" + se.Title + ")"
@@ -111,23 +123,29 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 		d["/Lang"] = "(" + se.Lang + ")"
 	}
 	if se.NamespaceRef != 0 {
-		d["/NS"] = strconv.Itoa(int(se.NamespaceRef)) + " 0 R"
+		refBuf = strconv.AppendInt(refBuf[:0], int64(se.NamespaceRef), 10)
+		d["/NS"] = string(refBuf) + " 0 R"
 	}
 
 	if len(se.Kids) > 0 {
 		kArray := make([]interface{}, 0, len(se.Kids))
-		for _, kid := range se.Kids { // unavoidable per-entry formatting (different ref per kid)
+		for _, kid := range se.Kids {
 			switch {
 			case kid.OBJR != nil:
+				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.OBJR.ObjRef), 10)
+				objStr := string(refBuf) + " 0 R"
+				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.OBJR.PageRef), 10)
+				pgStr := string(refBuf) + " 0 R"
 				kArray = append(kArray, map[string]interface{}{
 					"/Type": "/OBJR",
-					"/Obj":  strconv.Itoa(int(kid.OBJR.ObjRef)) + " 0 R",  // unavoidable per-entry formatting
-					"/Pg":   strconv.Itoa(int(kid.OBJR.PageRef)) + " 0 R",   // unavoidable per-entry formatting
+					"/Obj":  objStr,
+					"/Pg":   pgStr,
 				})
 			case kid.IsMCID:
-				kArray = append(kArray, kid.MCID)                           // plain int, no formatting needed
+				kArray = append(kArray, kid.MCID)
 			default:
-				kArray = append(kArray, strconv.Itoa(int(kid.Ref))+" 0 R") // unavoidable per-entry formatting
+				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.Ref), 10)
+				kArray = append(kArray, string(refBuf)+" 0 R")
 			}
 		}
 		d["/K"] = kArray
@@ -141,6 +159,7 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 // ParentTreeDict builds the /ParentTree number-tree dictionary mapping page
 // structure element IDs to their parent struct elements.
 func ParentTreeDict(nums map[int][]doc.ObjectID, annots map[int]doc.ObjectID) map[string]interface{} {
+	var refBuf []byte
 	keys := make([]int, 0, len(nums)+len(annots))
 	for k := range nums {
 		keys = append(keys, k)
@@ -157,11 +176,13 @@ func ParentTreeDict(nums map[int][]doc.ObjectID, annots map[int]doc.ObjectID) ma
 		if refs, ok := nums[k]; ok {
 			refList := make([]interface{}, 0, len(refs))
 			for _, ref := range refs {
-				refList = append(refList, strconv.Itoa(int(ref))+" 0 R") // unavoidable per-entry formatting
+				refBuf = strconv.AppendInt(refBuf[:0], int64(ref), 10)
+				refList = append(refList, string(refBuf)+" 0 R")
 			}
-			numPairs = append(numPairs, k, refList)                     // multiple appends but each key/value pair is distinct
+			numPairs = append(numPairs, k, refList)
 		} else if ref, ok := annots[k]; ok {
-			numPairs = append(numPairs, k, strconv.Itoa(int(ref))+" 0 R") // unavoidable per-entry formatting
+			refBuf = strconv.AppendInt(refBuf[:0], int64(ref), 10)
+			numPairs = append(numPairs, k, string(refBuf)+" 0 R")
 		}
 	}
 

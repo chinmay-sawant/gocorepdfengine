@@ -155,7 +155,8 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	totalPagesStr := strconv.Itoa(totalPages)
 	footerX := strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64)
 	footerY := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
-	for i, pc := range cfg.Pages { // page loop, totalPages already cached
+	var pageBuf []byte
+	for i, pc := range cfg.Pages {
 		streamBytes := pc.Stream
 		// Wrap main content in BDC/EMC for PDF/UA-2 when tagged.
 		if isUA {
@@ -181,10 +182,12 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				buf.WriteString("> Tj ET\n")
 			}
 
-			pageStr := "Page " + strconv.Itoa(pageNum) + " of " + totalPagesStr // different per page, unavoidable
+			pageBuf = strconv.AppendInt(pageBuf[:0], int64(pageNum), 10)
+			pageStr := "Page " + string(pageBuf) + " of " + totalPagesStr
 			buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
 			pageW := float64(len(pageStr)) * 8 * 0.55
-			buf.WriteString(strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', 6, 64)) // different per page, unavoidable
+			pageBuf = strconv.AppendFloat(pageBuf[:0], cfg.Width*0.98-pageW, 'f', 6, 64)
+			buf.Write(pageBuf)
 			buf.WriteString(" ")
 			buf.WriteString(footerY)
 			buf.WriteString(" Td <")

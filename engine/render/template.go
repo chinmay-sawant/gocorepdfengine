@@ -189,7 +189,7 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 	}
 
 	b64cache := make(map[string][]byte, 8)        // PERF-26: cache base64 decodes per unique image (size hint for expected images)
-	hexCache := make(map[string]color.RGB)        // PERF-230: cache ParseHex results per unique color
+	hexCache := make(map[string]color.RGB, 8)     // PERF-192: cache ParseHex results per unique color (size hint 8)
 	for i, row := range td.Rows {
 		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {

@@ -185,7 +185,7 @@ func Generate(config Config) (Result, error) {
 
 			// Generate subset so embedded font only contains used glyphs.
 			fontData := loadedFont.RawData
-			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
+			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 { // one-time per font, not looped — false positive PERF-217
 				fontData = loadedFont.SubsetData
 			}
 

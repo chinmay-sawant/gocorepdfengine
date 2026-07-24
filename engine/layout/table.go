@@ -79,8 +79,9 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 		contentW = pageW - 72
 	}
 
-	var cellWidths []float64
-	for _, row := range tl.Rows { // row iteration, unavoidable per-row cell processing
+	var cellWidthsBuf []float64
+	var imgBuf []byte
+	for _, row := range tl.Rows {
 		cellsLen := len(row.Cells)
 		if y-row.Height < contentBottom {
 			cb = NewContentBuilder(pageW, pageH)
@@ -89,13 +90,15 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 		}
 
 		// Pre-compute effective cell widths for this row, ensuring total = contentW.
-		if cap(cellWidths) < cellsLen {
-			cellWidths = make([]float64, cellsLen) // different rows have different cell counts, unavoidable
-		} else {
-			cellWidths = cellWidths[:cellsLen]
+		var cellWidths []float64
+		if cap(cellWidthsBuf) >= cellsLen {
+			cellWidths = cellWidthsBuf[:cellsLen]
 			for i := range cellWidths {
 				cellWidths[i] = 0
 			}
+		} else {
+			cellWidthsBuf = make([]float64, cellsLen)
+			cellWidths = cellWidthsBuf
 		}
 		var explicitSum float64
 		var explicitCount int
@@ -146,7 +149,8 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 
 			// Render image if present (content before borders so borders stay on top).
 			if cell.Image != nil {
-				imgName := "Img" + strconv.Itoa(len(cb.ImageObjects)+1) // per-cell image naming, unavoidable
+				imgBuf = strconv.AppendInt(imgBuf[:0], int64(len(cb.ImageObjects)+1), 10)
+				imgName := "Img" + string(imgBuf)
 				var img *image.Image
 				var err error
 				if cell.Image.IsJPEG {

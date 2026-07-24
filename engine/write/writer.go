@@ -119,14 +119,21 @@ func (e *Encoder) WriteStream(dict map[string]interface{}, data []byte) {
 
 // WriteXref writes a cross-reference table from a slice of byte offsets.
 func (e *Encoder) WriteXref(offsets []int64) {
-	fmt.Fprintf(&e.buf, "xref\n0 %d\n", len(offsets))
-	for i, off := range offsets { // xref entries, unavoidable per-entry formatting
-		offStr := strconv.FormatInt(off, 10)
-		offStr = "0000000000"[:10-len(offStr)] + offStr // zero-padded, fmt.Fprintf avoided intentionally
+	e.buf.WriteString("xref\n0 ")
+	e.buf.Write(strconv.AppendInt(nil, int64(len(offsets)), 10))
+	e.buf.WriteByte('\n')
+	xrefBuf := make([]byte, 0, 20)
+	for i, off := range offsets {
+		xrefBuf = strconv.AppendInt(xrefBuf[:0], off, 10)
+		padLen := 10 - len(xrefBuf)
+		if padLen > 0 {
+			e.buf.WriteString("0000000000"[:padLen])
+		}
+		e.buf.Write(xrefBuf)
 		if i == 0 {
-			e.buf.WriteString(offStr + " 65535 f \n")
+			e.buf.WriteString(" 65535 f \n")
 		} else {
-			e.buf.WriteString(offStr + " 00000 n \n")
+			e.buf.WriteString(" 00000 n \n")
 		}
 	}
 }

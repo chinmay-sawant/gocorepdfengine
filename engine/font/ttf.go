@@ -112,7 +112,7 @@ func LoadFromBytes(data []byte) (*Font, error) {
 
 	sfVersion := binary.BigEndian.Uint32(data)
 	if sfVersion != 0x00010000 && sfVersion != 0x4F54544F {
-		return nil, fmt.Errorf("font: not a TTF file (sfVersion=0x%08X)", sfVersion)
+		return nil, fmt.Errorf("font: not a TTF file (sfVersion=0x%08X)", sfVersion) //nolint: perflint // cold path (one-time validation)
 	}
 
 	f := &Font{
@@ -159,7 +159,7 @@ func parseHead(f *Font, data []byte) error {
 		return fmt.Errorf("font: parsing head table: %w", err)
 	}
 	if len(tbl) < 54 {
-		return fmt.Errorf("font: head table too short")
+		return errors.New("font: head table too short")
 	}
 	off := uint32(0)
 	off += 4 // version

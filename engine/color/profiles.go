@@ -227,16 +227,16 @@ func compress(data []byte) ([]byte, error) {
 		var err error
 		w, err = zlib.NewWriterLevel(&buf, flate.BestSpeed)
 		if err != nil {
-			return nil, fmt.Errorf("compress: create writer: %w", err)
+			return nil, fmt.Errorf("compress: create writer: %w", err) // cold path (writer init failure)
 		}
 		defer w.Close()
 		_, err = w.Write(data)
 		if err != nil {
-			return nil, fmt.Errorf("compress write: %w", err)
+			return nil, fmt.Errorf("compress write: %w", err) // cold path (write error)
 		}
 		err = w.Close()
 		if err != nil {
-			return nil, fmt.Errorf("compress close: %w", err)
+			return nil, fmt.Errorf("compress close: %w", err) // cold path (close error)
 		}
 		return buf.Bytes(), nil
 	}

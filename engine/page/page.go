@@ -42,28 +42,33 @@ func NewPage(width, height float64) *Page {
 // ToDict converts the Page into a PDF dictionary (map[string]interface{}).
 // fontMap and xobjMap are resolved to indirect object references by name.
 func (p *Page) ToDict(fontMap, xobjMap map[string]doc.ObjectID, pagesRef doc.ObjectID) map[string]interface{} {
+	var refBuf []byte
+	refBuf = strconv.AppendInt(refBuf[:0], int64(pagesRef), 10)
 	dict := map[string]interface{}{
 		"/Type":     "/Page",
-		"/Parent":   strconv.Itoa(int(pagesRef)) + " 0 R",
+		"/Parent":   string(refBuf) + " 0 R",
 		"/MediaBox": []interface{}{p.MediaBox[0], p.MediaBox[1], p.MediaBox[2], p.MediaBox[3]},
 	}
 	if p.ContentsRef != 0 {
-		dict["/Contents"] = strconv.Itoa(int(p.ContentsRef)) + " 0 R"
+		refBuf = strconv.AppendInt(refBuf[:0], int64(p.ContentsRef), 10)
+		dict["/Contents"] = string(refBuf) + " 0 R"
 	}
 	res := make(map[string]interface{})
 	hasRes := false
 	if len(fontMap) > 0 {
 		fd := make(map[string]interface{}, len(fontMap))
-		for name, ref := range fontMap { // map iteration, fine
-			fd["/"+name] = strconv.Itoa(int(ref)) + " 0 R" // unavoidable per-entry formatting
+		for name, ref := range fontMap {
+			refBuf = strconv.AppendInt(refBuf[:0], int64(ref), 10)
+			fd["/"+name] = string(refBuf) + " 0 R"
 		}
 		res["/Font"] = fd
 		hasRes = true
 	}
 	if len(xobjMap) > 0 {
 		xd := make(map[string]interface{}, len(xobjMap))
-		for name, ref := range xobjMap { // map iteration, fine
-			xd["/"+name] = strconv.Itoa(int(ref)) + " 0 R" // unavoidable per-entry formatting
+		for name, ref := range xobjMap {
+			refBuf = strconv.AppendInt(refBuf[:0], int64(ref), 10)
+			xd["/"+name] = string(refBuf) + " 0 R"
 		}
 		res["/XObject"] = xd
 		hasRes = true
@@ -86,9 +91,11 @@ func (p *Page) ToDict(fontMap, xobjMap map[string]doc.ObjectID, pagesRef doc.Obj
 
 // ToDict converts the Pages node into a PDF dictionary with Kids and Count.
 func (p *Pages) ToDict() map[string]interface{} {
+	var refBuf []byte
 	kids := make([]interface{}, len(p.Kids))
 	for i, kid := range p.Kids {
-		kids[i] = strconv.Itoa(int(kid)) + " 0 R" // unavoidable per-entry formatting
+		refBuf = strconv.AppendInt(refBuf[:0], int64(kid), 10)
+		kids[i] = string(refBuf) + " 0 R"
 	}
 	return map[string]interface{}{
 		"/Type":  "/Pages",

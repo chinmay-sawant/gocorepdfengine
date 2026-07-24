@@ -167,11 +167,11 @@ func (s *Stream) Compress() error {
 	w.Reset(&compressed)
 	if _, err := w.Write(s.Buf.Bytes()); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
-		return fmt.Errorf("content: compress: %w", err)
+		return fmt.Errorf("content: compress: %w", err) // cold path (error)
 	}
 	if err := w.Close(); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
-		return fmt.Errorf("content: compress: %w", err)
+		return fmt.Errorf("content: compress: %w", err) // cold path (error)
 	}
 	flateWriterPool.Put(w)
 	s.Buf = compressed

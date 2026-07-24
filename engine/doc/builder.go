@@ -117,11 +117,14 @@ func (d *Document) Build() []byte {
 	sortedLen := len(sorted)
 	objOffsets := make(map[ObjectID]int64, sortedLen)
 
-	for _, obj := range sorted { // sorted objects iteration, sortedLen already cached
+	var objBuf []byte
+	for _, obj := range sorted {
 		objOffsets[obj.ID] = int64(enc.Len())
-		enc.WriteString(strconv.Itoa(int(obj.ID))) // different per object, unavoidable
+		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.ID), 10)
+		enc.Write(objBuf) //nolint: errcheck
 		enc.WriteString(" ")
-		enc.WriteString(strconv.Itoa(int(obj.Gen))) // different per object, unavoidable
+		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.Gen), 10)
+		enc.Write(objBuf) //nolint: errcheck
 		enc.WriteString(" obj\n")
 
 		switch data := obj.Data.(type) {
@@ -154,7 +157,9 @@ func (d *Document) Build() []byte {
 	if d.TrailerInfo != nil && !d.HasMode(ModePDFA4) {
 		infoRef = maxID + 1
 		objOffsets[infoRef] = int64(enc.Len())
-		enc.WriteString(strconv.Itoa(int(infoRef)) + " 0 obj\n")
+		objBuf = strconv.AppendInt(objBuf[:0], int64(infoRef), 10)
+		enc.Write(objBuf) //nolint: errcheck
+		enc.WriteString(" 0 obj\n")
 		enc.WriteDict(d.TrailerInfo)
 		enc.WriteString("\n")
 		enc.WriteString("endobj\n")
