@@ -148,10 +148,17 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	// === Content streams ===
 	for i, pc := range cfg.Pages {
 		streamBytes := pc.Stream
+		// Wrap main content in BDC/EMC for PDF/UA-2 when tagged.
+		if isUA {
+			streamBytes = append([]byte("/P <</MCID 0>> BDC\n"), streamBytes...)
+		}
 		if cfg.FooterText != "" || len(cfg.Pages) > 1 {
 			var sb strings.Builder
 			pageNum := i + 1
 			totalPages := len(cfg.Pages)
+			if isUA {
+				sb.WriteString("/Artifact BMC\n")
+			}
 
 			if cfg.FooterText != "" {
 				sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
@@ -178,9 +185,20 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				sb.WriteString(fmt.Sprintf("%04X", r))
 			}
 			sb.WriteString("> Tj ET\n")
+			if isUA {
+				sb.WriteString("EMC\n") // close Artifact BMC
+			}
 
 			streamBytes = append([]byte{}, streamBytes...)
 			streamBytes = append(streamBytes, []byte(sb.String())...)
+		}
+		if isUA {
+			// Attach page content (non-artifact) EMC to end of stream.
+			// The BDC was prepended before the main content; the EMC closes it after everything.
+			emcSuffix := []byte("EMC\n")
+			// If we added an artifact block, the main-content EMC comes after the artifact EM
+			// which is already in sb. We just need one closing EMC at the very end.
+			streamBytes = append(streamBytes, emcSuffix...)
 		}
 		d.AddObjectAt(contentIDs[i], &write.Stream{
 			Dict: map[string]interface{}{"/Length": len(streamBytes)},

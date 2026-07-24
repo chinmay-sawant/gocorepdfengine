@@ -76,13 +76,19 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 
 	used := collectUsed(t)
 
+	// Determine the document title: use config pdfTitle, fall back to the title text.
+	docTitle := t.Config.PDFTitle
+	if docTitle == "" && t.Title != nil {
+		docTitle = t.Title.Text
+	}
+
 	return engine.GenerateDocument(engine.DocumentConfig{
 		Width:      pageW,
 		Height:     pageH,
 		Mode:       mode,
-		Title:      t.Config.PDFTitle,
+		Title:      docTitle,
 		Author:     "gocorepdfengine",
-		Subject:    t.Config.PDFTitle,
+		Subject:    docTitle,
 		Creator:    "gocorepdfengine",
 		Lang:       "en-US",
 		Pages:      pages,
