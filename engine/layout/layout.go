@@ -147,16 +147,22 @@ func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 		cb.FontRes["Helvetica"] = label
 		cb.UsedFonts["Helvetica"] = true
 	}
-	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg\n", fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85))
-	cb.Stream.BT()
-	cosA := 0.707
-	sinA := -0.707
-	fmt.Fprintf(&cb.Stream.Buf, "1 0 0 1 %s %s cm\n", fmtFloat(pageW/2), fmtFloat(pageH/2))
-	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s 0 0 cm\n", fmtFloat(cosA), fmtFloat(-sinA), fmtFloat(sinA), fmtFloat(cosA))
-	cb.Stream.Tf(label, 28)
-	fmt.Fprintf(&cb.Stream.Buf, "0 0 Td\n")
+	cosA := 0.71
+	sinA := 0.71
+	fmt.Fprintf(&cb.Stream.Buf, "/Artifact <</Attached [/Top] /Type /Pagination >> BDC\n")
+	fmt.Fprintf(&cb.Stream.Buf, "q\n")
+	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg %s %s %s RG\n",
+		fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85),
+		fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85))
+	fmt.Fprintf(&cb.Stream.Buf, "BT\n")
+	fmt.Fprintf(&cb.Stream.Buf, "/%s 74 Tf\n", label)
+	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s %s %s Tm\n",
+		fmtFloat(cosA), fmtFloat(sinA), fmtFloat(-sinA), fmtFloat(cosA),
+		fmtFloat(pageW*0.2), fmtFloat(pageH*0.3))
 	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
-	cb.Stream.ET()
+	fmt.Fprintf(&cb.Stream.Buf, "ET\n")
+	fmt.Fprintf(&cb.Stream.Buf, "Q\n")
+	fmt.Fprintf(&cb.Stream.Buf, "EMC\n")
 }
 
 func (cb *ContentBuilder) PlaceImage(img *image.Image, objName string, x, y, w, h float64) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chinmay/gocorepdfengine/engine"
 	"github.com/chinmay/gocorepdfengine/engine/color"
@@ -153,15 +154,16 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 	tl := &layout.TableLayout{ColWidths: cols}
 
 	bgH := color.ThemeHeaderBG
+	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 36,
+		Height: 45,
 		Cells: []layout.Cell{
-			layout.StyledCell("CONTRACT NOTE", font, 14, color.ThemeHeaderFG, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell("CN2024001", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
+			layout.StyledCell("CONTRACT NOTE", font, 18, color.ThemeHeaderFG, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(fmt.Sprintf("CN2024001 | %s", dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
 		},
 	})
 
@@ -241,14 +243,15 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{3.5, 1, 1, 1.5, 1.5}
 	tl := &layout.TableLayout{ColWidths: cols}
 	bgH := color.ThemeHeaderBG
+	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 36,
+		Height: 45,
 		Cells: []layout.Cell{
-			layout.StyledCell("ACTIVE TRADER CONTRACT NOTE", font, 12, color.ThemeHeaderFG, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
-			layout.StyledCell(fmt.Sprintf("%d Trades", len(note.Trades)), font, 10, color.ThemeHeaderSub, &bgH, 0, 36),
+			layout.StyledCell("ACTIVE TRADER CONTRACT NOTE", font, 18, color.ThemeHeaderFG, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
 		},
 	})
 	sec := color.ThemeSectionBG
@@ -322,16 +325,17 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{2, 1, 2, 0.8, 0.6, 2, 1}
 	tl := &layout.TableLayout{ColWidths: cols}
 	bgH := color.ThemeHeaderBG
+	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 32,
+		Height: 45,
 		Cells: []layout.Cell{
-			layout.StyledCell("HFT CONTRACT NOTE", font, 11, color.ThemeHeaderFG, &bgH, 0, 32),
-			layout.StyledCell("", font, 9, color.ThemeHeaderSub, &bgH, 0, 32),
-			layout.StyledCell("", font, 9, color.ThemeHeaderSub, &bgH, 0, 32),
-			layout.StyledCell("", font, 9, color.ThemeHeaderSub, &bgH, 0, 32),
-			layout.StyledCell("", font, 9, color.ThemeHeaderSub, &bgH, 0, 32),
-			layout.StyledCell(note.Client.Name, font, 9, color.ThemeHeaderSub, &bgH, 0, 32),
-			layout.StyledCell(fmt.Sprintf("%d Trades", len(note.Trades)), font, 9, color.ThemeHeaderSub, &bgH, 0, 32),
+			layout.StyledCell("HFT CONTRACT NOTE", font, 18, color.ThemeHeaderFG, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(note.Client.Name, font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
 		},
 	})
 	sec := color.ThemeSectionBG
