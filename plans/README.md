@@ -21,6 +21,18 @@ Each phase is a **checklist plan** you can execute independently. Complete phase
 
 **Out of scope:** HTTP API, frontend, bindings, **gopdfsuit as a dependency**, merge/redact product surface.
 
+## Architecture reviews
+
+| Date | File | Overall |
+|------|------|--------:|
+| 2026-07-25 | [reviews/improve-codebase-architecture/2026-07-25-architecture-review.md](./reviews/improve-codebase-architecture/2026-07-25-architecture-review.md) | **6.2 / 10** |
+
+## Ponytail reviews (leanness / over-engineering)
+
+| Date | File | Overall |
+|------|------|--------:|
+| 2026-07-25 | [pontail/ponytail-ultra-2026-07-25.md](./pontail/ponytail-ultra-2026-07-25.md) | **6.3 / 10** |
+
 ## Compliance + Zerodha harness
 
 ```bash

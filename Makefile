@@ -111,3 +111,6 @@ FINANCIAL_DIR := sampledata/financial
 
 bench-financial:
 	cd $(FINANCIAL_DIR) && go run .
+
+lint:
+	golangci-lint run -E revive,gocritic,gocyclo,goconst ./...
