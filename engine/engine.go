@@ -103,15 +103,23 @@ func Generate(config Config) (Result, error) {
 	// === Content stream ===
 	s := content.NewStream()
 	if isUA {
-		s.BDC("P", 0)
+		s.ArtifactBMC("")
 	}
 	s.BT()
+	if isUA {
+		s.EMC()
+		s.BDC("P", 0)
+	}
 	s.Tf("F1", config.FontSize)
 	s.Td(72, config.Height-150)
 	if isA4 {
 		s.TjCID(config.Text)
 	} else {
 		s.Tj(config.Text)
+	}
+	if isUA {
+		s.EMC()
+		s.ArtifactBMC("")
 	}
 	s.ET()
 	if isUA {
@@ -278,15 +286,6 @@ func Generate(config Config) (Result, error) {
 		nsDict := structure.Namespace()
 		d.AddObjectAt(nsRef, nsDict)
 
-		docElem := &structure.StructElem{
-			Type:         structure.S_Document,
-			ObjectID:     elemDocID,
-			Parent:       strRootRef,
-			NamespaceRef: nsRef,
-			MCID:         -1,
-		}
-		d.AddObjectAt(elemDocID, structure.StructElemDict(docElem))
-
 		pElem := &structure.StructElem{
 			Type:     structure.S_P,
 			Parent:   elemDocID,
@@ -294,11 +293,19 @@ func Generate(config Config) (Result, error) {
 			MCID:     0,
 		}
 		pElemID := d.AllocID()
-		d.AddObjectAt(pElemID, structure.StructElemDict(pElem))
 
-		docElem.Kids = []structure.StructElemKid{
-			{Ref: pElemID},
+		docElem := &structure.StructElem{
+			Type:         structure.S_Document,
+			ObjectID:     elemDocID,
+			Parent:       strRootRef,
+			NamespaceRef: nsRef,
+			PageRef:      pageID,
+			Lang:         config.Lang,
+			MCID:         -1,
+			Kids:         []structure.StructElemKid{{Ref: pElemID}},
 		}
+		d.AddObjectAt(elemDocID, structure.StructElemDict(docElem))
+		d.AddObjectAt(pElemID, structure.StructElemDict(pElem))
 
 		parentTreeDict := structure.ParentTreeDict(map[int][]doc.ObjectID{0: {pElemID}}, nil)
 		d.AddObjectAt(ptRef, parentTreeDict)

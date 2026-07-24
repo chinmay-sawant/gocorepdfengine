@@ -118,7 +118,7 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 		}
 		d["/K"] = kArray
 	} else if se.MCID >= 0 {
-		d["/K"] = se.MCID
+		d["/K"] = []interface{}{se.MCID}
 	}
 
 	return d
