@@ -15,7 +15,8 @@ func (f *Font) AddChar(r rune) {
 	}
 	gid, ok := f.cmap[r]
 	if !ok {
-		return
+		// Character not in font — use the .notdef glyph (GID 0).
+		gid = 0
 	}
 	if gm, exists := f.glyphMetrics[gid]; exists {
 		f.Glyphs[r] = &Glyph{GID: gid, Width: gm.Width, BBox: gm.BBox}

@@ -1,6 +1,9 @@
 package font
 
-import "sort"
+import (
+	"encoding/binary"
+	"sort"
+)
 
 type Font struct {
 	Name        string
@@ -67,6 +70,20 @@ func (f *Font) Widths() []int {
 		widths[i] = int(float64(g.Width)*scale + 0.5)
 	}
 	return widths
+}
+
+func (f *Font) DefaultWidth() int {
+	if f.UnitsPerEm == 0 || len(f.RawData) < 12 {
+		return 1000
+	}
+	// Read the hmtx table to get the .notdef glyph (GID 0) advance width.
+	if hmtxTable, err := findTable(f.RawData, "hmtx"); err == nil && len(hmtxTable) >= 4 {
+		w := int(binary.BigEndian.Uint16(hmtxTable[0:]))
+		if w > 0 {
+			return int(float64(w)*1000.0/float64(f.UnitsPerEm) + 0.5)
+		}
+	}
+	return 1000
 }
 
 func (f *Font) UsedRunes() []rune {

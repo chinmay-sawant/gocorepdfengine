@@ -221,7 +221,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				loadedFont.AddChar(r)
 			}
 			// Also mark letters, digits, and common punctuation.
-			for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |" {
+			for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |()$#%&*+<=>?@[]{!}_" {
 				loadedFont.AddChar(r)
 			}
 			libName := loadedFont.Name
