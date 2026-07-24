@@ -103,23 +103,15 @@ func Generate(config Config) (Result, error) {
 	// === Content stream ===
 	s := content.NewStream()
 	if isUA {
-		s.ArtifactBMC("")
-	}
-	s.BT()
-	if isUA {
-		s.EMC()
 		s.BDC("P", 0)
 	}
+	s.BT()
 	s.Tf("F1", config.FontSize)
 	s.Td(72, config.Height-150)
 	if isA4 {
 		s.TjCID(config.Text)
 	} else {
 		s.Tj(config.Text)
-	}
-	if isUA {
-		s.EMC()
-		s.ArtifactBMC("")
 	}
 	s.ET()
 	if isUA {
