@@ -253,12 +253,12 @@ func runBenchmark() error {
 	type latencyStats struct {
 		count, sumNs, minNs, maxNs int64
 	}
-	jobs := make(chan int, iterations)                     // fully consumed before wg.Wait() — false positive PERF-148
+	jobs := make(chan int, iterations)                     //nolint: perflint // PERF-148: fully consumed before wg.Wait()
 	errCh := make(chan error, iterations)
 	workerStats := make([]latencyStats, numWorkers)
 	var retailCount, activeCount, hftCount int64
 
-	memDone := make(chan bool, 1)
+	memDone := make(chan bool, 1)                           //nolint: perflint // PERF-148: buffered channel
 	var memWg sync.WaitGroup
 	memWg.Add(1)
 	go monitorMemory(memDone, &memWg)

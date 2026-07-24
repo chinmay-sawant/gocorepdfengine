@@ -18,7 +18,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
-var zlibWriterPool = sync.Pool{ // shared pool, correct
+var zlibWriterPool = sync.Pool{ //nolint: perflint // PERF-110: New returns any per Go API
 	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
@@ -185,7 +185,7 @@ func Generate(config Config) (Result, error) {
 
 			// Generate subset so embedded font only contains used glyphs.
 			fontData := loadedFont.RawData
-			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 { // one-time per font, not looped — false positive PERF-217
+			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 { //nolint: perflint // PERF-217: one-time per font, not looped
 				fontData = loadedFont.SubsetData
 			}
 

@@ -22,7 +22,7 @@ var (
 	grayData []byte
 )
 
-var zlibWriterPool = sync.Pool{
+var zlibWriterPool = sync.Pool{ //nolint: perflint // PERF-110: New returns any per Go API
 	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
@@ -164,7 +164,7 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 // binary.Write errors are impossible with these inputs and are safely discarded.
 func buildDesc(text string) []byte {
 	var buf bytes.Buffer
-	buf.Grow(20 + len(text))
+	buf.Grow(20 + len(text)) //nolint: perflint // PERF-215: buffer grow
 	buf.Write([]byte("desc"))
 	binary.Write(&buf, binary.BigEndian, uint32(0))   //nolint: errcheck
 	asciiCount := uint32(len(text) + 1)

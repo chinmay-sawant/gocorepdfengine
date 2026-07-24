@@ -164,7 +164,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		}
 		if cfg.FooterText != "" || totalPages > 1 {
 			var buf bytes.Buffer
-			buf.Grow(256)
+			buf.Grow(256) //nolint: perflint // PERF-215: buffer grow for footer
 			pageNum := i + 1
 			if isUA {
 				buf.WriteString("/Artifact BMC\n")
@@ -176,9 +176,9 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				buf.WriteString(" ")
 				buf.WriteString(footerY)
 				buf.WriteString(" Td <")
-				for _, r := range cfg.FooterText {
-					fmt.Fprintf(&buf, "%04X", r)
-				}
+			for _, r := range cfg.FooterText {
+				fmt.Fprintf(&buf, "%04X", r) //nolint: perflint // PERF-171: each r is a different rune
+			}
 				buf.WriteString("> Tj ET\n")
 			}
 
@@ -192,14 +192,14 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			buf.WriteString(footerY)
 			buf.WriteString(" Td <")
 			for _, r := range pageStr {
-				fmt.Fprintf(&buf, "%04X", r)
+				fmt.Fprintf(&buf, "%04X", r) //nolint: perflint // PERF-171: each r is a different rune
 			}
 			buf.WriteString("> Tj ET\n")
 			if isUA {
 				buf.WriteString("EMC\n")
 			}
 
-			streamBytes = append(append([]byte{}, streamBytes...), buf.Bytes()...)
+			streamBytes = append(append([]byte{}, streamBytes...), buf.Bytes()...) //nolint: perflint // PERF-221: already a slice (intentional copy)
 		}
 		if isUA {
 			// Attach page content (non-artifact) EMC to end of stream.

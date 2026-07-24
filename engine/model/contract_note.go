@@ -165,7 +165,7 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 	rng := rand.New(rand.NewSource(seed)) // Deterministic seed for benchmark reproducibility (not security-sensitive).
 	trades := make([]Trade, count)
 	hour, mn, sec := 9, 15, 0
-	symCount := len(symbols) // cached len for loop
+	symCount := len(symbols) //nolint: perflint // PERF-109: cached len for loop
 	for i := 0; i < count; i++ {
 		sym := symbols[rng.Intn(symCount)]
 		action := "BUY"
@@ -177,7 +177,7 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 		price = float64(int(price*100)) / 100
 		total := float64(qty) * price
 
-		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec) // test data generation (cold path)
+		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec) //nolint: perflint // PERF-6: test data generation (cold path)
 		sec++
 		if sec >= 60 {
 			sec = 0

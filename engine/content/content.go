@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-var flateWriterPool = sync.Pool{
+var flateWriterPool = sync.Pool{ //nolint: perflint // PERF-110: New returns any per Go API
 	New: func() any { // returns *flate.Writer
 		w, _ := flate.NewWriter(nil, flate.BestSpeed) //nolint: errcheck
 		return w

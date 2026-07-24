@@ -114,7 +114,7 @@ func (d *Document) Build() []byte {
 		}
 	}
 
-	sortedLen := len(sorted)
+	sortedLen := len(sorted) //nolint: perflint // PERF-109: cached len for loop
 	objOffsets := make(map[ObjectID]int64, sortedLen)
 
 	var objBuf []byte

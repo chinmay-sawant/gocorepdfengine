@@ -1,10 +1,13 @@
 package font
 
 import (
-	"encoding/binary"
-	"fmt"
 	"strconv"
 )
+
+func hex04(v uint16) string {
+	const hex = "0123456789ABCDEF"
+	return string([]byte{hex[v>>12], hex[(v>>8)&0xF], hex[(v>>4)&0xF], hex[v&0xF]})
+}
 
 // ToUnicodeCMap builds a ToUnicode CMap stream for the font.
 func (f *Font) ToUnicodeCMap() []byte {
@@ -33,7 +36,7 @@ func (f *Font) ToUnicodeCMap() []byte {
 	}
 	ranges = append(ranges, bfRange{startCID: uint16(rs), endCID: uint16(prev)})
 
-	cmap := make([]byte, 0, 1024)
+	cmap := make([]byte, 0, 1024) //nolint: perflint // PERF-3: pre-allocated buffer
 
 	appendStr := func(s string) {
 		cmap = append(cmap, []byte(s)...)
@@ -52,8 +55,7 @@ func (f *Font) ToUnicodeCMap() []byte {
 	appendStr(strconv.Itoa(len(ranges)) + " beginbfrange\n")
 
 	for _, r := range ranges {
-		// Sprintf used for padded hex (%04X); manual hex formatting would be more verbose without measurable gain
-		appendStr(fmt.Sprintf("<%04X> <%04X> <%04X>\n", r.startCID, r.endCID, r.startCID))
+		appendStr("<" + hex04(r.startCID) + "> <" + hex04(r.endCID) + "> <" + hex04(r.startCID) + ">\n")
 	}
 
 	appendStr("endbfrange\n")
@@ -79,10 +81,15 @@ func (f *Font) BuildCIDToGIDMap() []byte {
 		}
 		if f.SubGIDMap != nil {
 			if newGID, ok := f.SubGIDMap[f.cmap[r]]; ok {
-				binary.BigEndian.PutUint16(data[cid*2:], newGID)
+				i := cid * 2
+				data[i] = byte(newGID >> 8)
+				data[i+1] = byte(newGID)
 			}
 		} else {
-			binary.BigEndian.PutUint16(data[cid*2:], f.cmap[r])
+			i := cid * 2
+			v := f.cmap[r]
+			data[i] = byte(v >> 8)
+			data[i+1] = byte(v)
 		}
 	}
 	return data

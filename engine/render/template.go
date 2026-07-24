@@ -188,8 +188,41 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 		}
 	}
 
-	b64cache := make(map[string][]byte, 8)        // PERF-26: cache base64 decodes per unique image (size hint for expected images)
-	hexCache := make(map[string]color.RGB, 8)     // PERF-192: cache ParseHex results per unique color (size hint 8)
+	hexCache := make(map[string]color.RGB)
+	b64Cache := make(map[string][]byte)
+	propsCache := make(map[string]layout.CellProps)
+	for _, row := range td.Rows {
+		for _, c := range row.Row {
+			if c.Props != "" {
+				if _, ok := propsCache[c.Props]; !ok {
+					if p, err := layout.ParseProps(c.Props); err == nil {
+						propsCache[c.Props] = p
+					}
+				}
+			}
+			if c.BGColor != "" {
+				if _, ok := hexCache[c.BGColor]; !ok {
+					if parsed, err := color.ParseHex(c.BGColor); err == nil {
+						hexCache[c.BGColor] = parsed
+					}
+				}
+			}
+			if c.TextColor != "" {
+				if _, ok := hexCache[c.TextColor]; !ok {
+					if parsed, err := color.ParseHex(c.TextColor); err == nil {
+						hexCache[c.TextColor] = parsed
+					}
+				}
+			}
+			if c.Image != nil && c.Image.ImageData != "" {
+				if _, ok := b64Cache[c.Image.ImageData]; !ok {
+					if raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData); err == nil && len(raw) > 0 {
+						b64Cache[c.Image.ImageData] = raw
+					}
+				}
+			}
+		}
+	}
 	for i, row := range td.Rows {
 		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {
@@ -206,49 +239,32 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 
 		r := layout.Row{Height: rowH}
 		for _, c := range row.Row {
-			p, _ := layout.ParseProps(c.Props) //nolint: errcheck
+			p := propsCache[c.Props]
 			var fill *color.RGB
 			if c.BGColor != "" {
-				parsed, ok := hexCache[c.BGColor]
-				if !ok {
-					var err error
-					parsed, err = color.ParseHex(c.BGColor) // hexCache miss, parse once
-					if err == nil {
-						hexCache[c.BGColor] = parsed
-					}
+				if parsed, ok := hexCache[c.BGColor]; ok {
+					fill = &parsed
 				}
-				fill = &parsed
 			} else if defaultBG != nil {
 				fill = defaultBG
 			}
 			var tc [3]float64
 			if c.TextColor != "" {
-				parsed, ok := hexCache[c.TextColor]
-				if !ok {
-					var err error
-					parsed, err = color.ParseHex(c.TextColor) // hexCache miss, parse once
-					if err == nil {
-						hexCache[c.TextColor] = parsed
-					}
+				if parsed, ok := hexCache[c.TextColor]; ok {
+					tc = [3]float64(parsed)
 				}
-				tc = [3]float64(parsed)
 			} else if defaultTC != [3]float64{} {
 				tc = defaultTC
 			}
-			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH) // per-cell props, unavoidable
+			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
 			if c.Image != nil && c.Image.ImageData != "" {
-				raw, ok := b64cache[c.Image.ImageData]
-				if !ok {
-					var err error
-					raw, err = base64.StdEncoding.DecodeString(c.Image.ImageData) // b64cache miss, decode once
-					if err != nil || len(raw) == 0 {
-						r.Cells = append(r.Cells, lc)
-						continue
-					}
-					b64cache[c.Image.ImageData] = raw
+				if raw, ok := b64Cache[c.Image.ImageData]; ok {
+					isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
+					lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
+				} else {
+					r.Cells = append(r.Cells, lc)
+					continue
 				}
-				isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
-				lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
 			}
 			r.Cells = append(r.Cells, lc)
 		}

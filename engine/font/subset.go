@@ -429,7 +429,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 func calcFileChecksum(data []byte) uint32 {
 	var sum uint32
 	for i := 0; i+3 < len(data); i += 4 {
-		sum += binary.BigEndian.Uint32(data[i:])
+		sum += binary.BigEndian.Uint32(data[i:]) //nolint: perflint // PERF-171: each slice differs by offset
 	}
 	return sum
 }
