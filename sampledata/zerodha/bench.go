@@ -144,7 +144,6 @@ func monitorMemory(done chan bool, wg *sync.WaitGroup) {
 	}
 }
 
-//nolint:gocyclo
 func runBenchmark() error {
 	fmt.Println("=== Zerodha Gold Standard Benchmark (gocorepdfengine) ===")
 	fmt.Println("Pipeline: JSON → model → layout (colors) → GenerateDocument")
@@ -253,12 +252,12 @@ func runBenchmark() error {
 	type latencyStats struct {
 		count, sumNs, minNs, maxNs int64
 	}
-	jobs := make(chan int, iterations)                     //nolint: perflint // PERF-148: fully consumed before wg.Wait()
+	jobs := make(chan int, iterations)
 	errCh := make(chan error, iterations)
 	workerStats := make([]latencyStats, numWorkers)
 	var retailCount, activeCount, hftCount int64
 
-	memDone := make(chan bool, 1)                           //nolint: perflint // PERF-148: buffered channel
+	memDone := make(chan bool, 1)
 	var memWg sync.WaitGroup
 	memWg.Add(1)
 	go monitorMemory(memDone, &memWg)
@@ -267,7 +266,7 @@ func runBenchmark() error {
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
 		go func(workerID int) {
-			defer wg.Done() //nolint: scopelint
+			defer wg.Done()
 			stats := &workerStats[workerID]
 			for jobIdx := range jobs {
 				var note *model.ContractNote

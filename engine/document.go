@@ -45,7 +45,6 @@ type DocumentConfig struct {
 // GenerateDocument builds a complete PDF binary from pre-built page content
 // streams, handling font embedding, ICC profiles, structure trees (PDF/UA-2),
 // output intents (PDF/A-4), page numbering, and footer text.
-//nolint:gocyclo
 func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	if cfg.Width == 0 {
 		cfg.Width = 595
@@ -164,7 +163,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		}
 		if cfg.FooterText != "" || totalPages > 1 {
 			var buf bytes.Buffer
-			buf.Grow(256) //nolint: perflint // PERF-215: buffer grow for footer
+			buf.Grow(256)
 			pageNum := i + 1
 			if isUA {
 				buf.WriteString("/Artifact BMC\n")
@@ -177,7 +176,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 				buf.WriteString(footerY)
 				buf.WriteString(" Td <")
 			for _, r := range cfg.FooterText {
-				fmt.Fprintf(&buf, "%04X", r) //nolint: perflint // PERF-171: each r is a different rune
+				fmt.Fprintf(&buf, "%04X", r)
 			}
 				buf.WriteString("> Tj ET\n")
 			}
@@ -192,14 +191,14 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 			buf.WriteString(footerY)
 			buf.WriteString(" Td <")
 			for _, r := range pageStr {
-				fmt.Fprintf(&buf, "%04X", r) //nolint: perflint // PERF-171: each r is a different rune
+				fmt.Fprintf(&buf, "%04X", r)
 			}
 			buf.WriteString("> Tj ET\n")
 			if isUA {
 				buf.WriteString("EMC\n")
 			}
 
-			streamBytes = append(append([]byte{}, streamBytes...), buf.Bytes()...) //nolint: perflint // PERF-221: already a slice (intentional copy)
+			streamBytes = append(append([]byte{}, streamBytes...), buf.Bytes()...)
 		}
 		if isUA {
 			// Attach page content (non-artifact) EMC to end of stream.

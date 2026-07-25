@@ -22,7 +22,7 @@ var (
 	grayData []byte
 )
 
-var zlibWriterPool = sync.Pool{ //nolint: perflint // PERF-110: New returns any per Go API
+var zlibWriterPool = sync.Pool{
 	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
@@ -164,34 +164,34 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 // binary.Write errors are impossible with these inputs and are safely discarded.
 func buildDesc(text string) []byte {
 	var buf bytes.Buffer
-	buf.Grow(20 + len(text)) //nolint: perflint // PERF-215: buffer grow
+	buf.Grow(20 + len(text))
 	buf.Write([]byte("desc"))
-	binary.Write(&buf, binary.BigEndian, uint32(0))   //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint32(0))
 	asciiCount := uint32(len(text) + 1)
-	binary.Write(&buf, binary.BigEndian, asciiCount)  //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, asciiCount)
 	buf.WriteString(text)
 	buf.WriteByte(0)
-	binary.Write(&buf, binary.BigEndian, uint32(0))   //nolint: errcheck
-	binary.Write(&buf, binary.BigEndian, uint16(0))  //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint32(0))
+	binary.Write(&buf, binary.BigEndian, uint16(0))
 	return buf.Bytes()
 }
 
 func buildXYZ(x, y, z float64) []byte {
 	var buf bytes.Buffer
 	buf.Write([]byte("XYZ "))
-	binary.Write(&buf, binary.BigEndian, uint32(0))         //nolint: errcheck
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(x))     //nolint: errcheck
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(y))     //nolint: errcheck
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(z))     //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint32(0))
+	binary.Write(&buf, binary.BigEndian, s15Fixed16(x))
+	binary.Write(&buf, binary.BigEndian, s15Fixed16(y))
+	binary.Write(&buf, binary.BigEndian, s15Fixed16(z))
 	return buf.Bytes()
 }
 
 func buildCurve(gamma float64) []byte {
 	var buf bytes.Buffer
 	buf.Write([]byte("curv"))
-	binary.Write(&buf, binary.BigEndian, uint32(0))                //nolint: errcheck
-	binary.Write(&buf, binary.BigEndian, uint32(1))                //nolint: errcheck
-	binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))  //nolint: errcheck
+	binary.Write(&buf, binary.BigEndian, uint32(0))
+	binary.Write(&buf, binary.BigEndian, uint32(1))
+	binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))
 	return buf.Bytes()
 }
 

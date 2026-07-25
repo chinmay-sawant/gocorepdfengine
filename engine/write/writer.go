@@ -192,7 +192,7 @@ func StringLit(s string) string {
 			buf.WriteString("\\t")
 		default:
 			if r >= 128 {
-				fmt.Fprintf(&buf, "\\%03o", r) //nolint: perflint // PERF-171: each r is a different rune
+				fmt.Fprintf(&buf, "\\%03o", r)
 			} else {
 				buf.WriteRune(r)
 			}

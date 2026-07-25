@@ -63,7 +63,6 @@ func (f *Font) GenerateSubset() error {
 		"head": true, "hhea": true, "hmtx": true,
 		"maxp": true, "glyf": true, "loca": true,
 		"cmap": true, "name": true, "OS/2": true,
-		//nolint:gocritic
 		"post": true, "cvt ": true, "prep": true,
 		"fpgm": true, "cvt": true,
 	}
@@ -93,7 +92,6 @@ func pad4(n uint32) uint32 {
 	return (n + 3) & ^uint32(3)
 }
 
-//nolint:gocyclo
 func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
 	gidList := make([]uint16, 0, len(usedGIDs))
 	for gid := range usedGIDs {
@@ -101,27 +99,27 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	}
 	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
 
-	maxpData, _ := findTable(orig, "maxp") //nolint: errcheck
+	maxpData, _ := findTable(orig, "maxp")
 	oldNumGlyphs := uint16(0)
 	if len(maxpData) >= 6 {
 		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[4:])
 	}
 
-	headData, _ := findTable(orig, "head") //nolint: errcheck
+	headData, _ := findTable(orig, "head")
 	locaFormat := uint16(0)
 	if len(headData) >= 52 {
 		locaFormat = binary.BigEndian.Uint16(headData[50:])
 	}
 
-	hheaData, _ := findTable(orig, "hhea") //nolint: errcheck
+	hheaData, _ := findTable(orig, "hhea")
 	numHMetrics := oldNumGlyphs
 	if len(hheaData) >= 36 {
 		numHMetrics = binary.BigEndian.Uint16(hheaData[34:])
 	}
 
-	glyfTable, _ := findTable(orig, "glyf") //nolint: errcheck
-	locaTable, _ := findTable(orig, "loca") //nolint: errcheck
-	hmtxTable, _ := findTable(orig, "hmtx") //nolint: errcheck
+	glyfTable, _ := findTable(orig, "glyf")
+	locaTable, _ := findTable(orig, "loca")
+	hmtxTable, _ := findTable(orig, "hmtx")
 
 	type glyphEntry struct {
 		gid    uint16
@@ -429,7 +427,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 func calcFileChecksum(data []byte) uint32 {
 	var sum uint32
 	for i := 0; i+3 < len(data); i += 4 {
-		sum += binary.BigEndian.Uint32(data[i:]) //nolint: perflint // PERF-171: each slice differs by offset
+		sum += binary.BigEndian.Uint32(data[i:])
 	}
 	return sum
 }

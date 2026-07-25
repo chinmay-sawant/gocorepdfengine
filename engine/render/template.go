@@ -152,7 +152,7 @@ func titleLayout(title *model.Title, contentW float64) *layout.TableLayout {
 		}
 	}
 
-	p, _ := layout.ParseProps(title.Props) //nolint: errcheck
+	p, _ := layout.ParseProps(title.Props)
 	rowH := p.FontSize*2 + 12
 	if rowH < 36 {
 		rowH = 36

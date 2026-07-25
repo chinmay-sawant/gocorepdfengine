@@ -36,7 +36,7 @@ func (f *Font) ToUnicodeCMap() []byte {
 	}
 	ranges = append(ranges, bfRange{startCID: uint16(rs), endCID: uint16(prev)})
 
-	cmap := make([]byte, 0, 1024) //nolint: perflint // PERF-3: pre-allocated buffer
+	cmap := make([]byte, 0, 1024)
 
 	appendStr := func(s string) {
 		cmap = append(cmap, []byte(s)...)

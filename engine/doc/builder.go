@@ -114,17 +114,17 @@ func (d *Document) Build() []byte {
 		}
 	}
 
-	sortedLen := len(sorted) //nolint: perflint // PERF-109: cached len for loop
+	sortedLen := len(sorted)
 	objOffsets := make(map[ObjectID]int64, sortedLen)
 
 	var objBuf []byte
 	for _, obj := range sorted {
 		objOffsets[obj.ID] = int64(enc.Len())
 		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.ID), 10)
-		enc.Write(objBuf) //nolint: errcheck
+		enc.Write(objBuf)
 		enc.WriteString(" ")
 		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.Gen), 10)
-		enc.Write(objBuf) //nolint: errcheck
+		enc.Write(objBuf)
 		enc.WriteString(" obj\n")
 
 		switch data := obj.Data.(type) {
@@ -142,7 +142,7 @@ func (d *Document) Build() []byte {
 			enc.WriteStream(dict, data.Data)
 			enc.WriteString("\n")
 		case []byte:
-			enc.Write(data) //nolint: errcheck
+			enc.Write(data)
 			enc.WriteString("\n")
 		default:
 			enc.WriteString(fmt.Sprint(data))
@@ -158,7 +158,7 @@ func (d *Document) Build() []byte {
 		infoRef = maxID + 1
 		objOffsets[infoRef] = int64(enc.Len())
 		objBuf = strconv.AppendInt(objBuf[:0], int64(infoRef), 10)
-		enc.Write(objBuf) //nolint: errcheck
+		enc.Write(objBuf)
 		enc.WriteString(" 0 obj\n")
 		enc.WriteDict(d.TrailerInfo)
 		enc.WriteString("\n")

@@ -64,7 +64,6 @@ var (
 	ThemeWhite      = RGB{1, 1, 1}
 )
 
-//nolint:gochecknoglobals // hardcoded valid hex colours, safe init
 func init() {
 	ThemeHeaderBG, _ = MustHex("#154360")
 	ThemeHeaderFG, _ = MustHex("#FFFFFF")

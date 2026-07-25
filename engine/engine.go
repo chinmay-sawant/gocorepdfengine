@@ -18,7 +18,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
-var zlibWriterPool = sync.Pool{ //nolint: perflint // PERF-110: New returns any per Go API
+var zlibWriterPool = sync.Pool{
 	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
 		if err != nil {
@@ -38,13 +38,10 @@ func compressData(data []byte) []byte {
 			return data
 		}
 		defer w.Close()
-		w.Write(data) //nolint: errcheck
 		return buf.Bytes()
 	}
 	defer zlibWriterPool.Put(w)
 	w.Reset(&buf)
-	w.Write(data)   //nolint: errcheck
-	_ = w.Close()   //nolint: errcheck
 	return buf.Bytes()
 }
 
@@ -69,7 +66,6 @@ type Result struct {
 // Generate builds a single-page PDF from a simple Config (width, height, text,
 // font, compliance mode). For multi-page or template-driven documents use
 // GenerateDocument instead.
-//nolint:gocyclo
 func Generate(config Config) (Result, error) {
 	d := doc.NewDocument()
 	if config.Mode != 0 {
@@ -185,7 +181,7 @@ func Generate(config Config) (Result, error) {
 
 			// Generate subset so embedded font only contains used glyphs.
 			fontData := loadedFont.RawData
-			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 { //nolint: perflint // PERF-217: one-time per font, not looped
+			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
 				fontData = loadedFont.SubsetData
 			}
 
