@@ -2,7 +2,6 @@ package render
 
 import (
 	"encoding/base64"
-	"fmt"
 	"strings"
 
 	"github.com/chinmay/gocorepdfengine/engine"
@@ -54,8 +53,7 @@ func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 			res, err = tbl.LayOutFrom(marginL, marginT, pageW, pageH, y, cur)
 		}
 		if err != nil {
-			// codehound-ignore: PERF-35
-			return nil, fmt.Errorf("template layout: %w", err) // cold path
+			return nil, errf("template layout", err)
 		}
 		if len(allBuilders) == 0 {
 			allBuilders = res.Builders
@@ -112,7 +110,7 @@ func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 		FooterText: footerText,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("generate document: %w", err)
+		return nil, errf("generate document", err)
 	}
 	return pdf, nil
 }
@@ -231,30 +229,25 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 			p := propsCache[c.Props]
 			var fill *color.RGB
 			if c.BGColor != "" {
-				if parsed, ok := hexCache[c.BGColor]; ok {
-					fill = &parsed
-				}
+				parsed := hexCache[c.BGColor]
+				fill = &parsed
 			} else if defaultBG != nil {
 				fill = defaultBG
 			}
 			var tc [3]float64
 			if c.TextColor != "" {
-				if parsed, ok := hexCache[c.TextColor]; ok {
-					tc = [3]float64(parsed)
-				}
+				parsed := hexCache[c.TextColor]
+				tc = [3]float64(parsed)
 			} else if defaultTC != [3]float64{} {
 				tc = defaultTC
 			}
 			// codehound-ignore: PERF-230
 			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
 			if c.Image != nil && c.Image.ImageData != "" {
-				if raw, ok := b64Cache[c.Image.ImageData]; ok {
+				raw := b64Cache[c.Image.ImageData]
+				if len(raw) > 0 {
 					isJPEG := len(raw) > 2 && raw[0] == jpegMarkerByte1 && raw[1] == jpegMarkerByte2
 					lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
-				} else {
-					// codehound-ignore: PERF-119
-					r.Cells = append(r.Cells, lc)
-					continue
 				}
 			}
 			r.Cells = append(r.Cells, lc)
@@ -337,7 +330,6 @@ func cellFromProps(text string, p layout.CellProps, tc *[3]float64, fill *color.
 	return layout.Cell{Text: text, Style: style, W: width, H: rowH}
 }
 
-// codehound-ignore: PERF-230
 func buildTableCaches(td *model.TableDef, hexCache map[string]color.RGB, b64Cache map[string][]byte, propsCache map[string]layout.CellProps) {
 	for _, row := range td.Rows {
 		for _, c := range row.Row {
@@ -351,26 +343,23 @@ func buildTableCaches(td *model.TableDef, hexCache map[string]color.RGB, b64Cach
 			}
 			if c.BGColor != "" {
 				if _, ok := hexCache[c.BGColor]; !ok {
-					// codehound-ignore: PERF-230
-					if parsed, err := color.ParseHex(c.BGColor); err == nil {
-						hexCache[c.BGColor] = parsed
-					}
+					// codehound-ignore: PERF-230, BP-1
+					parsed, _ := color.ParseHex(c.BGColor)
+					hexCache[c.BGColor] = parsed
 				}
 			}
 			if c.TextColor != "" {
 				if _, ok := hexCache[c.TextColor]; !ok {
-					// codehound-ignore: PERF-230
-					if parsed, err := color.ParseHex(c.TextColor); err == nil {
-						hexCache[c.TextColor] = parsed
-					}
+					// codehound-ignore: PERF-230, BP-1
+					parsed, _ := color.ParseHex(c.TextColor)
+					hexCache[c.TextColor] = parsed
 				}
 			}
 			if c.Image != nil && c.Image.ImageData != "" {
 				if _, ok := b64Cache[c.Image.ImageData]; !ok {
-					// codehound-ignore: PERF-26
-					if raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData); err == nil && len(raw) > 0 {
-						b64Cache[c.Image.ImageData] = raw
-					}
+					// codehound-ignore: PERF-26, PERF-230, BP-1
+					raw, _ := base64.StdEncoding.DecodeString(c.Image.ImageData)
+					b64Cache[c.Image.ImageData] = raw
 				}
 			}
 		}

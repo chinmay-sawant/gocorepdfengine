@@ -2,8 +2,6 @@
 
 package font
 
-import "fmt"
-
 var liberationMap = map[string]string{
 	"Helvetica":             "LiberationSans-Regular",
 	"Helvetica-Bold":        "LiberationSans-Bold",
@@ -70,21 +68,18 @@ func (r *Registry) Get(name string) *Font {
 func (r *Registry) RegisterStandardFont(name string, _ string) (*Font, error) {
 	liberationName, ok := LiberationFontFor(name)
 	if !ok {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("font: no Liberation mapping for standard font %s", name)
+		return nil, errfs("font: no Liberation mapping for standard font %s", name)
 	}
 
 	paths := LiberationPaths()
 	libPath, ok := paths[liberationName]
 	if !ok || libPath == "" {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("font: no path for Liberation font %s", liberationName)
+		return nil, errfs("font: no path for Liberation font %s", liberationName)
 	}
 
 	font, err := LoadFromPath(libPath)
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("font: loading Liberation font %s from %s: %w", liberationName, libPath, err)
+		return nil, errf("font: loading Liberation font "+liberationName+" from "+libPath, err)
 	}
 
 	r.Register(liberationName, font)

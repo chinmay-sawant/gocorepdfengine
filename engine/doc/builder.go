@@ -1,4 +1,4 @@
-// codehound-ignore-file: BP-29,BP-30,PERF-109
+// codehound-ignore-file: BP-29,BP-30
 
 // Package doc implements building PDF document structures.
 package doc
@@ -124,8 +124,8 @@ func (d *Document) Build() []byte {
 	objOffsets := make(map[ObjectID]int64, sortedLen)
 
 	var objBuf []byte
+	// codehound-ignore: PERF-109
 	for _, obj := range sorted {
-		// codehound-ignore: PERF-109
 		objOffsets[obj.ID] = int64(enc.Len())
 		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.ID), decimalBase)
 		// codehound-ignore: BP-1

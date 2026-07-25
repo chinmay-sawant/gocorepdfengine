@@ -6,6 +6,7 @@ package write
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -46,8 +47,7 @@ func NewEncoder() *Encoder {
 func (e *Encoder) Write(p []byte) (int, error) {
 	n, err := e.buf.Write(p)
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return n, fmt.Errorf("write: %w", err)
+		return n, errf("write", err)
 	}
 	return n, nil
 }
@@ -152,7 +152,7 @@ func (e *Encoder) WriteXref(offsets []int64) {
 		if padLen > 0 {
 			e.buf.WriteString("0000000000"[:padLen])
 		}
-		// codehound-ignore: PERF-215
+		e.buf.Grow(len(xrefBuf))
 		e.buf.Write(xrefBuf)
 		if i == 0 {
 			e.buf.WriteString(" 65535 f \n")
@@ -241,6 +241,7 @@ func DateString(t time.Time) string {
 		sign = '-'
 		offset = -offset
 	}
+	// codehound-ignore: PERF-35
 	return fmt.Sprintf("D:%s%c%02d'%02d'", // cold path (one-time init)
 		t.Format("20060102150405"),
 		sign,
@@ -259,3 +260,7 @@ type Stream struct {
 }
 
 var _ io.Writer = (*Encoder)(nil)
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
+}

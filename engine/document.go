@@ -110,7 +110,6 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	// === Allocate IDs ===
 	contentIDs := make([]doc.ObjectID, len(cfg.Pages)) // dense slice, not map — fine
 	for i := range contentIDs {
-		// codehound-ignore: PERF-221
 		contentIDs[i] = d.AllocID()
 	}
 
@@ -314,7 +313,12 @@ func setupDocumentFont(d *doc.Document, usedText string, isA4 bool, shared *font
 			loadedFont.AddChar(r)
 		}
 		libName := loadedFont.Name
-		compressed := compressData(loadedFont.RawData)
+		// Prefer subset so we do not embed the full TTF on every document.
+		fontData := loadedFont.RawData
+		if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
+			fontData = loadedFont.SubsetData
+		}
+		compressed := compressData(fontData)
 		d.AddObjectAt(shared.fontFile2ID, &write.Stream{
 			Dict: map[string]interface{}{"/Length": len(compressed), "/Filter": "/FlateDecode"},
 			Data: compressed,
@@ -355,7 +359,7 @@ func buildStructureTree(d *doc.Document, isUA bool, pages []PageContent, lang st
 	}
 	d.AddObjectAt(nsRef, structure.Namespace())
 	kids := make([]structure.StructElemKid, 0, len(pages))
-	ptMap := make(map[int][]doc.ObjectID, len(pages))
+	ptMap := make([][]doc.ObjectID, len(pages))
 	for i := range pages {
 		pElem := &structure.StructElem{
 			Type:    structure.TypeP,

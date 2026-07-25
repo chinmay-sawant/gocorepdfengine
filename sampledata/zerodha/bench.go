@@ -157,20 +157,19 @@ func loadBaseNotes() (*model.ContractNote, *model.ContractNote, *model.ContractN
 	// Templates live next to this package.
 	dir, err := os.Getwd()
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return nil, nil, nil, fmt.Errorf("getwd: %w", err)
+		return nil, nil, nil, errf("getwd", err)
 	}
 	retail, err := model.LoadJSON(filepath.Join(dir, "retail_investor.json"))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("load retail: %w", err)
+		return nil, nil, nil, errf("load retail", err)
 	}
 	active, err := model.LoadJSON(filepath.Join(dir, "active_trader.json"))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("load active: %w", err)
+		return nil, nil, nil, errf("load active", err)
 	}
 	hft, err := model.LoadJSON(filepath.Join(dir, "hft_algo.json"))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("load hft: %w", err)
+		return nil, nil, nil, errf("load hft", err)
 	}
 	return retail, active, hft, nil
 }
@@ -186,7 +185,7 @@ func prepareNote(base *model.ContractNote, tradeCount int, seed int64) *model.Co
 func renderNote(n *model.ContractNote) ([]byte, error) {
 	pdf, err := render.PDF(n, render.Options{Compliant: benchCompliant})
 	if err != nil {
-		return nil, fmt.Errorf("render note: %w", err)
+		return nil, errf("render note", err)
 	}
 	return pdf, nil
 }
@@ -247,7 +246,7 @@ func runBenchmark() error {
 
 	baseRetail, baseActive, baseHFT, err := loadBaseNotes()
 	if err != nil {
-		return fmt.Errorf("loading base notes: %w", err)
+		return errf("loading base notes", err)
 	}
 
 	// Cached models (expanded once).
@@ -264,7 +263,7 @@ func runBenchmark() error {
 	opts := render.Options{Compliant: benchCompliant}
 	var retailPDF, activePDF, hftPDF []byte
 	if err := runWarmup(cached, baseRetail, baseActive, baseHFT, benchSeed, opts, retailNote, activeNote, hftNote, &retailPDF, &activePDF, &hftPDF); err != nil {
-		return fmt.Errorf("warmup: %w", err)
+		return errf("warmup", err)
 	}
 
 	const (
@@ -355,7 +354,7 @@ func runBenchmark() error {
 		errCount++
 	}
 	if errCount > 0 {
-		return fmt.Errorf("benchmark failed with %d errors", errCount)
+		return errfs("benchmark failed with %d errors", errCount)
 	}
 
 	var totalCount, totalSumNs, minNs, maxNs int64
@@ -442,15 +441,15 @@ func runWarmup(cached bool, baseRetail, baseActive, baseHFT *model.ContractNote,
 	var err error
 	*retailPDF, err = render.PDF(r, opts)
 	if err != nil {
-		return fmt.Errorf("retail warm-up: %w", err)
+		return errf("retail warm-up", err)
 	}
 	*activePDF, err = render.PDF(a, opts)
 	if err != nil {
-		return fmt.Errorf("active warm-up: %w", err)
+		return errf("active warm-up", err)
 	}
 	*hftPDF, err = render.PDF(h, opts)
 	if err != nil {
-		return fmt.Errorf("hft warm-up: %w", err)
+		return errf("hft warm-up", err)
 	}
 	fmt.Printf("  Retail PDF: %d bytes (%.2f KB)\n", len(*retailPDF), float64(len(*retailPDF))/bytesPerKB)
 	fmt.Printf("  Active PDF: %d bytes (%.2f KB)\n", len(*activePDF), float64(len(*activePDF))/bytesPerKB)
@@ -499,4 +498,13 @@ func (r *simpleRNG) next() uint64 {
 		r.seed = 1
 	}
 	return r.seed
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
+}
+
+func errfs(format string, args ...any) error {
+	// codehound-ignore: PERF-35
+	return fmt.Errorf(format, args...)
 }

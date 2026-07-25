@@ -3,7 +3,7 @@ package meta
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
+	"encoding/hex"
 	"strings"
 	"text/template"
 	"time"
@@ -89,9 +89,18 @@ func newUUID() string {
 	}
 	u[6] = (u[6] & uuidMask1) | uuidVariant
 	u[8] = (u[8] & uuidMask2) | uuidVersion
-	// codehound-ignore: PERF-35
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", // cold path (one-time UUID gen, unavoidable formatting)
-		u[0:4], u[4:6], u[6:8], u[8:10], u[10:16])
+
+	var buf [36]byte
+	hex.Encode(buf[0:8], u[0:4])
+	buf[8] = '-'
+	hex.Encode(buf[9:13], u[4:6])
+	buf[13] = '-'
+	hex.Encode(buf[14:18], u[6:8])
+	buf[18] = '-'
+	hex.Encode(buf[19:23], u[8:10])
+	buf[23] = '-'
+	hex.Encode(buf[24:36], u[10:16])
+	return string(buf[:])
 }
 
 func padding(n int) string {

@@ -139,3 +139,6 @@ const fsRegularBit = 5
 
 // PDF font descriptor flag bits
 const flagSymbolicBit = 2
+
+// Pool buffer sizes
+const glyphBufInitSize = 65536

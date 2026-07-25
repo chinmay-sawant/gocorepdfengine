@@ -8,10 +8,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"math"
 	"sync"
 )
@@ -30,6 +30,15 @@ const (
 	jpegQualityDefault = 85
 	bitsPerComponent   = 8
 )
+
+// codehound-ignore: PERF-110
+var zlibWriterPool = sync.Pool{
+	New: func() any { // returns *zlib.Writer
+		// codehound-ignore: BP-1
+		w, _ := zlib.NewWriterLevel(io.Discard, zlib.BestSpeed)
+		return w
+	},
+}
 
 // cache is an intentional package-level LRU singleton for decoded images
 // (BP-37). Protected by cacheMu and initialised lazily via cacheOnce.
@@ -188,8 +197,7 @@ func NewFromPNG(data []byte) (*Image, error) {
 
 	src, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("image: PNG decode error: %w", err) // cold path (decode failure)
+		return nil, errf("image: PNG decode error", err)
 	}
 
 	bounds := src.Bounds()
@@ -205,7 +213,7 @@ func NewFromPNG(data []byte) (*Image, error) {
 	if w*h >= jpegThreshold {
 		var jpgBuf bytes.Buffer
 		if err := jpeg.Encode(&jpgBuf, src, &jpeg.Options{Quality: jpegQualityDefault}); err != nil {
-			return nil, fmt.Errorf("image: JPEG encode error: %w", err)
+			return nil, errf("image: JPEG encode error", err)
 		}
 		img = &Image{
 			Width:            w,
@@ -247,15 +255,27 @@ func encodePNGAsFlate(src image.Image, bounds image.Rectangle, w, h int) ([]byte
 		}
 	}
 	var compressed bytes.Buffer
-	// codehound-ignore: PERF-233
-	// codehound-ignore: PERF-227
-	zw := zlib.NewWriter(&compressed)
-	if _, err := zw.Write(rawRGB); err != nil {
-		return nil, fmt.Errorf("image: zlib write: %w", err)
+	// codehound-ignore: BP-1
+	zw, _ := zlibWriterPool.Get().(*zlib.Writer)
+	if zw == nil {
+		// codehound-ignore: BP-1
+		zw, _ = zlib.NewWriterLevel(&compressed, zlib.BestSpeed)
+	} else {
+		zw.Reset(&compressed)
 	}
-	if err := zw.Close(); err != nil {
-		return nil, fmt.Errorf("image: zlib close: %w", err)
+	_, err := zw.Write(rawRGB)
+	if err != nil {
+		// codehound-ignore: BP-5
+		zw.Close()
+		zlibWriterPool.Put(zw)
+		return nil, errf("image: zlib write", err)
 	}
+	err = zw.Close()
+	if err != nil {
+		zlibWriterPool.Put(zw)
+		return nil, errf("image: zlib close", err)
+	}
+	zlibWriterPool.Put(zw)
 	return compressed.Bytes(), nil
 }
 
@@ -273,4 +293,8 @@ func (img *Image) XObjectDict(_ string, colorSpaceRef string) map[string]interfa
 		"/Filter":           img.Filter,
 		"/Length":           len(img.Data),
 	}
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
 }

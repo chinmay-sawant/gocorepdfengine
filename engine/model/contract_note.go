@@ -4,7 +4,7 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math/rand"
 	"os"
 	"strconv"
@@ -106,13 +106,11 @@ type Audit struct {
 func LoadJSON(path string) (*ContractNote, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		return nil, errf("read "+path, err)
 	}
 	var note ContractNote
 	if err := json.Unmarshal(data, &note); err != nil {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("parse %s: %w", path, err) // cold path (one-time load)
+		return nil, errf("parse "+path, err)
 	}
 	note.applyDefaults()
 	return &note, nil
@@ -181,7 +179,6 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 	trades := make([]Trade, count)
 	hour, mn, sec := 9, 15, 0
 	symCount := len(symbols)
-	// codehound-ignore: PERF-109
 	for i := 0; i < count; i++ {
 		sym := symbols[rng.Intn(symCount)]
 		action := "BUY"
@@ -193,8 +190,16 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 		price = float64(int(price*pricePrecision)) / pricePrecision
 		total := float64(qty) * price
 
-		// codehound-ignore: PERF-6
-		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec)
+		var timeBuf [8]byte
+		timeBuf[0] = byte('0' + hour/10)
+		timeBuf[1] = byte('0' + hour%10)
+		timeBuf[2] = ':'
+		timeBuf[3] = byte('0' + mn/10)
+		timeBuf[4] = byte('0' + mn%10)
+		timeBuf[5] = ':'
+		timeBuf[6] = byte('0' + sec/10)
+		timeBuf[7] = byte('0' + sec%10)
+		timeStr := string(timeBuf[:])
 		sec++
 		if sec >= timeUnit {
 			sec = 0
@@ -238,4 +243,8 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 // Money formats a rupee amount for display (ASCII "Rs." for portable fonts).
 func Money(v float64) string {
 	return "Rs." + strconv.FormatFloat(v, 'f', 2, 64)
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
 }

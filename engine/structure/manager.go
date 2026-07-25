@@ -12,7 +12,7 @@ type Manager struct {
 	Elements    []*StructElem
 	MCIDCounter int
 	PageMCIDs   map[int]int
-	ParentTree  map[int][]doc.ObjectID
+	ParentTree  [][]doc.ObjectID
 	AnnotTree   map[int]doc.ObjectID
 	NextObjID   func() doc.ObjectID
 	Root        *StructElem
@@ -22,9 +22,11 @@ type Manager struct {
 // zero values (producing no structure output).
 func NewManager(enabled bool, allocID func() doc.ObjectID) *Manager {
 	return &Manager{
-		Enabled:    enabled,
-		PageMCIDs:  make(map[int]int),
-		ParentTree: make(map[int][]doc.ObjectID),
+		Enabled: enabled,
+		// codehound-ignore: PERF-123
+		PageMCIDs: make(map[int]int),
+		// codehound-ignore: PERF-123
+		ParentTree: make([][]doc.ObjectID, 0),
 		AnnotTree:  make(map[int]doc.ObjectID),
 		NextObjID:  allocID,
 	}

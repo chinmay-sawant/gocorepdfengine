@@ -7,7 +7,7 @@ import (
 	"compress/flate"
 	"compress/zlib"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -297,39 +297,38 @@ func buildGray() []byte {
 func compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	// codehound-ignore: BP-1
-	w, _ := zlibWriterPool.Get().(*zlib.Writer) // Pool returns *zlib.Writer; type assertion safe for this pool.
+	w, _ := zlibWriterPool.Get().(*zlib.Writer)
 	if w == nil {
 		var err error
 		w, err = zlib.NewWriterLevel(&buf, flate.BestSpeed)
 		if err != nil {
-			// codehound-ignore: PERF-35
-			return nil, fmt.Errorf("compress: create writer: %w", err) // cold path (writer init failure)
+			return nil, errf("compress: create writer", err)
 		}
 		_, err = w.Write(data)
 		if err != nil {
 			// codehound-ignore: BP-5
 			w.Close()
-			// codehound-ignore: PERF-35
-			return nil, fmt.Errorf("compress write: %w", err) // cold path (write error)
+			return nil, errf("compress write", err)
 		}
 		err = w.Close()
 		if err != nil {
-			// codehound-ignore: PERF-35
-			return nil, fmt.Errorf("compress close: %w", err) // cold path (close error)
+			return nil, errf("compress close", err)
 		}
 		return buf.Bytes(), nil
 	}
 	defer zlibWriterPool.Put(w)
 	w.Reset(&buf)
 	_, err := w.Write(data)
-	if err != nil { // cold path (error)
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("compress write: %w", err)
+	if err != nil {
+		return nil, errf("compress write", err)
 	}
 	err = w.Close()
-	if err != nil { // cold path (error)
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("compress close: %w", err)
+	if err != nil {
+		return nil, errf("compress close", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
 }

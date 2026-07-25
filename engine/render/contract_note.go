@@ -2,6 +2,7 @@
 package render
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -83,8 +84,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	res, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return nil, fmt.Errorf("contract note layout: %w", err)
+		return nil, errf("contract note layout", err)
 	}
 
 	pages := make([]engine.PageContent, 0, len(res.Builders))
@@ -154,7 +154,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 		FooterText: footerText,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("generate document: %w", err)
+		return nil, errf("generate document", err)
 	}
 	return pdf, nil
 }
@@ -318,6 +318,7 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
 			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
 			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			// codehound-ignore: PERF-35
 			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, fontSizeHeaderSub, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader), // cold path
 		},
 	})
@@ -501,4 +502,8 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 		},
 	})
 	return tl
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
 }

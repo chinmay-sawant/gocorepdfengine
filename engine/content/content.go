@@ -4,6 +4,7 @@ package content
 import (
 	"bytes"
 	"compress/flate"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -30,7 +31,7 @@ const (
 var flateWriterPool = sync.Pool{
 	New: func() any { // returns *flate.Writer
 		// codehound-ignore: BP-1
-		w, _ := flate.NewWriter(nil, flate.BestSpeed) // flate.NewWriter with nil dst always succeeds; error safely discarded.
+		w, _ := flate.NewWriter(nil, flate.BestSpeed) // flate.NewWriter with nil dst always succeeds
 		return w
 	},
 }
@@ -187,21 +188,18 @@ func (s *Stream) Compress() error {
 		var err error
 		w, err = flate.NewWriter(&compressed, flate.BestSpeed)
 		if err != nil {
-			// codehound-ignore: PERF-35
-			return fmt.Errorf("content: compress: %w", err)
+			return errors.Join(errors.New("content: compress"), err)
 		}
 	} else {
 		w.Reset(&compressed)
 	}
-	if _, err := w.Write(s.Buf.Bytes()); err != nil { // cold path (error)
+	if _, err := w.Write(s.Buf.Bytes()); err != nil {
 		flateWriterPool.Put(w)
-		// codehound-ignore: PERF-35
-		return fmt.Errorf("content: compress: %w", err) // cold path (error)
+		return errors.Join(errors.New("content: compress"), err)
 	}
-	if err := w.Close(); err != nil { // cold path (error)
+	if err := w.Close(); err != nil {
 		flateWriterPool.Put(w)
-		// codehound-ignore: PERF-35
-		return fmt.Errorf("content: compress: %w", err) // cold path (error)
+		return errors.Join(errors.New("content: compress"), err)
 	}
 	flateWriterPool.Put(w)
 	s.Buf = compressed

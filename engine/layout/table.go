@@ -87,7 +87,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 		contentW = pageW - pointToPixel
 	}
 
-	var cellWidthsBuf []float64
+	var cellWidthsBuf = make([]float64, 0, 8)
 	var imgBuf []byte
 	for _, row := range tl.Rows {
 		cellsLen := len(row.Cells)
@@ -173,7 +173,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 			}
 
 			// codehound-ignore: PERF-230
-			tw := textWidth(cell.Text, cell.Style.FontSize) // per-cell content, unavoidable
+			tw := cellTextWidth(cell.Text, cell.Style.FontSize)
 			tx := x + cell.Style.Padding
 			switch cell.Style.Align {
 			case AlignLeft:
@@ -245,4 +245,8 @@ func drawSide(cb *ContentBuilder, r Rect, bs *BorderStyle, side string) {
 	rx2 := fmtFloat(x2)
 	ry2 := fmtFloat(y2)
 	fmt.Fprintf(&cb.Stream.Buf, "%s %s m %s %s l S\n", rx1, ry1, rx2, ry2)
+}
+
+func cellTextWidth(text string, fontSize float64) float64 {
+	return textWidth(text, fontSize)
 }

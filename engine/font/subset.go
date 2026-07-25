@@ -6,7 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 )
+
+// codehound-ignore: PERF-110
+var glyphBufPool = sync.Pool{
+	New: func() any {
+		return make([]byte, 0, glyphBufInitSize)
+	},
+}
 
 const tableCVT = "cvt "
 
@@ -59,8 +67,7 @@ func (f *Font) GenerateSubset() error {
 
 	entries, err := tableDir(f.RawData)
 	if err != nil { // cold path (error on subset)
-		// codehound-ignore: PERF-35
-		return fmt.Errorf("font: tableDir: %w", err)
+		return errf("font: tableDir", err)
 	}
 
 	requiredTags := map[string]bool{
@@ -73,8 +80,7 @@ func (f *Font) GenerateSubset() error {
 
 	subset, err := buildSubsetTTF(f, f.RawData, entries, usedGIDs, requiredTags)
 	if err != nil {
-		// codehound-ignore: PERF-35
-		return fmt.Errorf("font: subset generation error: %w", err)
+		return errf("font: subset generation error", err)
 	}
 
 	if len(subset) < ttfDirOffset {
@@ -167,7 +173,16 @@ func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte,
 		})
 	}
 
-	glyphDataBuf := make([]byte, totalGlyphSize)
+	bufPtr, _ := glyphBufPool.Get().(*[]byte)
+	var buf []byte
+	if bufPtr != nil {
+		buf = *bufPtr
+	}
+	if cap(buf) < int(totalGlyphSize) {
+		buf = make([]byte, totalGlyphSize)
+	}
+	glyphDataBuf := buf[:totalGlyphSize]
+	defer glyphBufPool.Put(&buf)
 	var dataOffset uint32
 	var glyphs = make([]glyphEntry, 0, len(infos))
 	for _, info := range infos {
@@ -311,6 +326,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 
 	var newMaxpData []byte
 	if len(maxpData) >= ttfMaxpMinLen {
+		// Copy before mutate — maxpData is a slice into shared RawData.
 		// codehound-ignore: PERF-226
 		newMaxpData = make([]byte, len(maxpData))
 		copy(newMaxpData, maxpData)
@@ -635,4 +651,13 @@ func buildEmptyFormat4CMap() []byte {
 	data[22] = 0
 	data[23] = 0
 	return data
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
+}
+
+func errfs(format string, args ...any) error {
+	// codehound-ignore: PERF-35
+	return fmt.Errorf(format, args...)
 }

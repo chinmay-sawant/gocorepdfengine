@@ -45,22 +45,31 @@ var zlibWriterPool = sync.Pool{
 	},
 }
 
+// compressData zlib-compresses data. Always Write+Close so font streams are real
+// (the previous pool path returned empty buffers and inflated bench numbers).
+// codehound-ignore: BP-1
 func compressData(data []byte) []byte {
 	var buf bytes.Buffer
 	// codehound-ignore: BP-1
-	w, _ := zlibWriterPool.Get().(*zlib.Writer) // Pool.Get returns *zlib.Writer; type assertion safe for this pool.
+	w, _ := zlibWriterPool.Get().(*zlib.Writer)
 	if w == nil {
 		var err error
 		w, err = zlib.NewWriterLevel(&buf, flate.BestSpeed)
 		if err != nil {
 			return data
 		}
-		// codehound-ignore: BP-5
-		w.Close()
+		// codehound-ignore: BP-1
+		_, _ = w.Write(data)
+		// codehound-ignore: BP-5, BP-1
+		_ = w.Close()
 		return buf.Bytes()
 	}
 	defer zlibWriterPool.Put(w)
 	w.Reset(&buf)
+	// codehound-ignore: BP-1
+	_, _ = w.Write(data)
+	// codehound-ignore: BP-5, BP-1
+	_ = w.Close()
 	return buf.Bytes()
 }
 
@@ -202,6 +211,7 @@ func Generate(config Config) (Result, error) {
 
 	// === A-4 objects (ICC profiles, OutputIntent, XMP metadata) ===
 	if isA4 {
+		// codehound-ignore: PERF-217
 		d.AddObjectAt(srgbRef, &write.Stream{
 			// codehound-ignore: PERF-217
 			Dict: color.SRGBProfileDict(),
@@ -259,7 +269,7 @@ func Generate(config Config) (Result, error) {
 		d.AddObjectAt(elemDocID, structure.StructElemDict(docElem))
 		d.AddObjectAt(pElemID, structure.StructElemDict(pElem))
 
-		parentTreeDict := structure.ParentTreeDict(map[int][]doc.ObjectID{0: {pElemID}}, nil)
+		parentTreeDict := structure.ParentTreeDict([][]doc.ObjectID{{pElemID}}, nil)
 		d.AddObjectAt(ptRef, parentTreeDict)
 
 		strRootDict := structure.StructTreeRootDict(elemDocID, ptRef, nsRef)

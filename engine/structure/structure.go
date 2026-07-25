@@ -5,7 +5,6 @@
 package structure
 
 import (
-	"sort"
 	"strconv"
 
 	"github.com/chinmay/gocorepdfengine/engine/doc"
@@ -165,29 +164,21 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 
 // ParentTreeDict builds the /ParentTree number-tree dictionary mapping page
 // structure element IDs to their parent struct elements.
-func ParentTreeDict(nums map[int][]doc.ObjectID, annots map[int]doc.ObjectID) map[string]interface{} {
+func ParentTreeDict(nums [][]doc.ObjectID, annots map[int]doc.ObjectID) map[string]interface{} {
 	var refBuf []byte
-	keys := make([]int, 0, len(nums)+len(annots))
-	for k := range nums {
-		keys = append(keys, k)
-	}
-	for k := range annots {
-		if _, ok := nums[k]; !ok {
-			keys = append(keys, k)
-		}
-	}
-	sort.Ints(keys)
-
-	numPairs := make([]interface{}, 0, len(keys)*pairMultiplier)
-	for _, k := range keys {
-		if refs, ok := nums[k]; ok {
+	numPairs := make([]interface{}, 0, len(nums)*pairMultiplier)
+	for i, refs := range nums {
+		if len(refs) > 0 {
 			refList := make([]interface{}, 0, len(refs))
 			for _, ref := range refs {
 				refBuf = strconv.AppendInt(refBuf[:0], int64(ref), decimalBase)
 				refList = append(refList, string(refBuf)+" 0 R")
 			}
-			numPairs = append(numPairs, k, refList)
-		} else if ref, ok := annots[k]; ok {
+			numPairs = append(numPairs, i, refList)
+		}
+	}
+	for k, ref := range annots {
+		if k >= len(nums) || len(nums[k]) == 0 {
 			refBuf = strconv.AppendInt(refBuf[:0], int64(ref), decimalBase)
 			numPairs = append(numPairs, k, string(refBuf)+" 0 R")
 		}
