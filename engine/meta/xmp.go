@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+const (
+	xmpPaddingSize = 2048
+	uuidVariant    = 0x40
+	uuidVersion    = 0x80
+	uuidMask1      = 0x0f
+	uuidMask2      = 0x3f
+)
+
 type XMPConfig struct {
 	Title      string
 	Author     string
@@ -79,8 +87,8 @@ func newUUID() string {
 	if _, err := rand.Read(u[:]); err != nil {
 		return "00000000-0000-0000-0000-000000000000"
 	}
-	u[6] = (u[6] & 0x0f) | 0x40
-	u[8] = (u[8] & 0x3f) | 0x80
+	u[6] = (u[6] & uuidMask1) | uuidVariant
+	u[8] = (u[8] & uuidMask2) | uuidVersion
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", // cold path (one-time UUID gen, unavoidable formatting)
 		u[0:4], u[4:6], u[6:8], u[8:10], u[10:16])
 }
@@ -114,7 +122,7 @@ func BuildXMP(config XMPConfig) []byte {
 		PDFUA:        config.PDFUA,
 		DocumentID:   config.DocumentID,
 		InstanceID:   config.InstanceID,
-		Padding:      padding(2048),
+		Padding:      padding(xmpPaddingSize),
 	}
 	var buf bytes.Buffer
 	if err := xmpTmpl.Execute(&buf, data); err != nil {

@@ -18,6 +18,17 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+const (
+	marginPosX       = 72
+	textYOffset      = 150
+	defaultFontFlags = 32
+	defaultAscent    = 1000
+	defaultDescent   = -200
+	defaultCapHeight = 700
+	defaultStemV     = 80
+	defaultXHeight   = 500
+)
+
 var zlibWriterPool = sync.Pool{
 	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
@@ -132,7 +143,7 @@ func Generate(config Config) (Result, error) {
 	}
 	s.BT()
 	s.Tf("F1", config.FontSize)
-	s.Td(72, config.Height-150)
+	s.Td(marginPosX, config.Height-textYOffset)
 	if isA4 {
 		s.TjCID(config.Text)
 	} else {
@@ -219,10 +230,10 @@ func Generate(config Config) (Result, error) {
 		d.AddObjectAt(nsRef, nsDict)
 
 		pElem := &structure.StructElem{
-			Type:     structure.TypeP,
-			Parent:   elemDocID,
-			PageRef:  pageID,
-			MCID:     0,
+			Type:    structure.TypeP,
+			Parent:  elemDocID,
+			PageRef: pageID,
+			MCID:    0,
 		}
 		pElemID := d.AllocID()
 
@@ -275,8 +286,8 @@ func Generate(config Config) (Result, error) {
 func addFontObjects(d *doc.Document, fontName, text string, isA4 bool, fontRef, cidFontID, descriptorID, fontFile2ID, toUnicodeID, cidToGIDMapID doc.ObjectID) {
 	if !isA4 {
 		d.AddObjectAt(fontRef, map[string]interface{}{
-			"/Type":    "/Font",
-			"/Subtype": "/Type1",
+			"/Type":     "/Font",
+			"/Subtype":  "/Type1",
 			"/BaseFont": "/" + fontName,
 		})
 		return
@@ -337,15 +348,15 @@ func addFontObjects(d *doc.Document, fontName, text string, isA4 bool, fontRef, 
 
 	libName := "LiberationSans-Regular"
 	fakeFont := &font.Font{
-		Name:       libName,
-		Flags:      32,
-		FontBBox:   [4]int16{-1000, -1000, 1000, 1000},
+		Name:        libName,
+		Flags:       defaultFontFlags,
+		FontBBox:    [4]int16{-1000, -1000, 1000, 1000},
 		ItalicAngle: 0,
-		Ascent:     1000,
-		Descent:    -200,
-		CapHeight:  700,
-		StemV:      80,
-		XHeight:    500,
+		Ascent:      defaultAscent,
+		Descent:     -200,
+		CapHeight:   defaultCapHeight,
+		StemV:       defaultStemV,
+		XHeight:     defaultXHeight,
 	}
 	d.AddObjectAt(fontFile2ID, &write.Stream{
 		Dict: map[string]interface{}{"/Length": 0},

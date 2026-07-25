@@ -66,11 +66,11 @@ func (f *Font) Widths() []int {
 		return keys[i] < keys[j]
 	})
 
-	scale := 1000.0 / float64(f.UnitsPerEm)
+	scale := ttfUPEm / float64(f.UnitsPerEm)
 	widths := make([]int, len(keys))
 	for i, r := range keys {
 		g := f.Glyphs[r]
-		widths[i] = int(float64(g.Width)*scale + 0.5)
+		widths[i] = int(float64(g.Width)*scale + roundingHalf)
 	}
 	return widths
 }
@@ -78,16 +78,15 @@ func (f *Font) Widths() []int {
 // DefaultWidth returns the default glyph width (1000 EM-units).
 func (f *Font) DefaultWidth() int {
 	if f.UnitsPerEm == 0 || len(f.RawData) < 12 {
-		return 1000
+		return ttfUPEmInt
 	}
-	// Read the hmtx table to get the .notdef glyph (GID 0) advance width.
-	if hmtxTable, err := findTable(f.RawData, "hmtx"); err == nil && len(hmtxTable) >= 4 {
+	if hmtxTable, err := findTable(f.RawData, "hmtx"); err == nil && len(hmtxTable) >= ttfDWordSize {
 		w := int(binary.BigEndian.Uint16(hmtxTable[0:]))
 		if w > 0 {
-			return int(float64(w)*1000.0/float64(f.UnitsPerEm) + 0.5)
+			return int(float64(w)*ttfUPEm/float64(f.UnitsPerEm) + roundingHalf)
 		}
 	}
-	return 1000
+	return ttfUPEmInt
 }
 
 // UsedRunes returns all runes that have been added to the font, sorted in ascending order.

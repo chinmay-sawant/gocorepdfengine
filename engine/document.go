@@ -19,12 +19,21 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+const (
+	footerBufGrow      = 256
+	docDecimalBase     = 10
+	floatPrecision     = 6
+	floatBitSize       = 64
+	charAvgWidth       = 8
+	fontSizeProportion = 0.55
+)
+
 // PageContent is one page stream plus font/image resource labels used on that page.
 type PageContent struct {
-	Stream         []byte
-	FontRes        map[string]string // logical font name -> /F1 label
-	UsedFonts      map[string]bool
-	ImageXObjects  map[string]*image.Image // XObject name -> image data
+	Stream        []byte
+	FontRes       map[string]string // logical font name -> /F1 label
+	UsedFonts     map[string]bool
+	ImageXObjects map[string]*image.Image // XObject name -> image data
 }
 
 type fontChain struct {
@@ -231,7 +240,7 @@ func buildContentStreams(d *doc.Document, cfg DocumentConfig, isUA bool, content
 		}
 		if cfg.FooterText != "" || totalPages > 1 {
 			var buf bytes.Buffer
-			buf.Grow(256)
+			buf.Grow(footerBufGrow)
 			pageNum := i + 1
 			if isUA {
 				buf.WriteString("/Artifact BMC\n")
@@ -249,11 +258,11 @@ func buildContentStreams(d *doc.Document, cfg DocumentConfig, isUA bool, content
 				buf.WriteString("> Tj ET\n")
 			}
 
-			pageBuf = strconv.AppendInt(pageBuf[:0], int64(pageNum), 10)
+			pageBuf = strconv.AppendInt(pageBuf[:0], int64(pageNum), docDecimalBase)
 			pageStr := "Page " + string(pageBuf) + " of " + totalPagesStr
 			buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
-			pageW := float64(len(pageStr)) * 8 * 0.55
-			pageBuf = strconv.AppendFloat(pageBuf[:0], cfg.Width*0.98-pageW, 'f', 6, 64)
+			pageW := float64(len(pageStr)) * charAvgWidth * fontSizeProportion
+			pageBuf = strconv.AppendFloat(pageBuf[:0], cfg.Width*0.98-pageW, 'f', floatPrecision, floatBitSize)
 			buf.Write(pageBuf)
 			buf.WriteString(" ")
 			buf.WriteString(footerY)
@@ -325,9 +334,9 @@ func setupDocumentFont(d *doc.Document, usedText string, isA4 bool, shared *font
 	}
 
 	fake := &font.Font{
-		Name: "LiberationSans-Regular", Flags: 32,
+		Name: "LiberationSans-Regular", Flags: defaultFontFlags,
 		FontBBox: [4]int16{-1000, -1000, 1000, 1000},
-		Ascent: 1000, Descent: -200, CapHeight: 700, StemV: 80, XHeight: 500,
+		Ascent:   defaultAscent, Descent: defaultDescent, CapHeight: defaultCapHeight, StemV: defaultStemV, XHeight: defaultXHeight,
 	}
 	d.AddObjectAt(shared.fontFile2ID, &write.Stream{Dict: map[string]interface{}{"/Length": 0}, Data: []byte{}})
 	tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")

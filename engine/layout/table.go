@@ -7,25 +7,32 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/image"
 )
 
+const (
+	marginMultiplier = 2
+	pointToPixel     = 72
+	decimalBase      = 10
+	lineHeightFactor = 1.2
+)
+
 // CellStyle controls the visual appearance of a table cell.
 type CellStyle struct {
-	FontName    string
-	FontSize    float64
-	TextColor   [3]float64
-	FillColor   *[3]float64
-	Border      *BorderStyle
-	BorderLeft  *BorderStyle
-	BorderRight *BorderStyle
-	BorderTop   *BorderStyle
+	FontName     string
+	FontSize     float64
+	TextColor    [3]float64
+	FillColor    *[3]float64
+	Border       *BorderStyle
+	BorderLeft   *BorderStyle
+	BorderRight  *BorderStyle
+	BorderTop    *BorderStyle
 	BorderBottom *BorderStyle
-	Padding     float64
-	Align       Alignment
+	Padding      float64
+	Align        Alignment
 }
 
 // CellImage holds raw image data to be placed inside a cell.
 type CellImage struct {
-	Data        []byte // raw PNG or JPEG bytes
-	IsJPEG      bool
+	Data   []byte // raw PNG or JPEG bytes
+	IsJPEG bool
 }
 
 // Cell is a single table cell with text, style, dimensions, and optional image.
@@ -74,9 +81,9 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 	cb := startCB
 
 	// Compute available content width from margins and page width.
-	contentW := pageW - marginLeft*2
+	contentW := pageW - marginLeft*marginMultiplier
 	if contentW <= 0 {
-		contentW = pageW - 72
+		contentW = pageW - pointToPixel
 	}
 
 	var cellWidthsBuf []float64
@@ -149,7 +156,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 
 			// Render image if present (content before borders so borders stay on top).
 			if cell.Image != nil {
-				imgBuf = strconv.AppendInt(imgBuf[:0], int64(len(cb.ImageObjects)+1), 10)
+				imgBuf = strconv.AppendInt(imgBuf[:0], int64(len(cb.ImageObjects)+1), decimalBase)
 				imgName := "Img" + string(imgBuf)
 				var img *image.Image
 				var err error
@@ -166,12 +173,13 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 			tw := textWidth(cell.Text, cell.Style.FontSize) // per-cell content, unavoidable
 			tx := x + cell.Style.Padding
 			switch cell.Style.Align {
+			case AlignLeft:
 			case AlignCenter:
-				tx = x + cellW/2 - tw/2
+				tx = x + cellW*half - tw*half
 			case AlignRight:
 				tx = x + cellW - tw - cell.Style.Padding
 			}
-			startY := y - row.Height + (row.Height-cell.Style.FontSize*1.2)/2
+			startY := y - row.Height + (row.Height-cell.Style.FontSize*lineHeightFactor)*half
 
 			textRun := TextRun{
 				Text:     cell.Text,

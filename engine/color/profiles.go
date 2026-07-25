@@ -12,6 +12,63 @@ import (
 	"time"
 )
 
+const (
+	defaultGamma        = 2.2
+	gammaEncodeScale    = 256.0
+	gammaEncodeRoundOff = 0.5
+)
+
+const (
+	s15Fixed16Scale   = 65536.0
+	iccHeaderSize     = 128
+	iccVersion        = 0x02100000
+	iccProfileClass   = "mntr"
+	iccSigACSP        = "acsp"
+	iccSigAPPL        = "APPL"
+	iccCMMType        = "appl"
+	iccTagTypeDesc    = "desc"
+	iccTagTypeXYZ     = "XYZ "
+	iccTagTypeCurv    = "curv"
+	iccTagSigDesc     = "desc"
+	iccTagSigCPRT     = "cprt"
+	iccTagSigWTPT     = "wtpt"
+	iccTagSigRXYZ     = "rXYZ"
+	iccTagSigGXYZ     = "gXYZ"
+	iccTagSigBXYZ     = "bXYZ"
+	iccTagSigRTRC     = "rTRC"
+	iccTagSigGTRC     = "gTRC"
+	iccTagSigBTRC     = "bTRC"
+	iccTagSigKTRC     = "kTRC"
+	iccTagCountSize   = 4
+	iccTagTableSize   = 12
+	iccColorSpaceRGB  = "RGB "
+	iccColorSpaceGray = "GRAY"
+	iccPCSXYZ         = "XYZ "
+	iccN              = 3
+	iccGrayN          = 1
+	descBufExtra      = 20
+	xyzFactor         = 0.9642
+)
+
+const (
+	rX = 0.4361
+	rY = 0.2225
+	rZ = 0.0139
+	gX = 0.3851
+	gY = 0.7169
+	gZ = 0.0971
+	bX = 0.1431
+	bY = 0.0606
+	bZ = 0.7140
+	wX = 0.9642
+	wY = 1.0
+	wZ = 0.8249
+)
+
+const (
+	align4Mask = 3
+)
+
 // srgbOnce/grayOnce and their backing slices are package-level state used by
 // SRGBProfile / GrayProfile. They are initialised exactly once via sync.Once
 // and are functionally immutable after first access (BP-37).
@@ -70,7 +127,7 @@ func GrayProfile() []byte {
 // SRGBProfileDict returns the PDF stream dictionary for the sRGB ICC profile.
 func SRGBProfileDict() map[string]interface{} {
 	return map[string]interface{}{
-		"/N":         3,
+		"/N":         iccN,
 		"/Alternate": "/DeviceRGB",
 		"/Filter":    "/FlateDecode",
 		"/Length":    len(srgbData),
@@ -80,7 +137,7 @@ func SRGBProfileDict() map[string]interface{} {
 // GrayProfileDict returns the PDF stream dictionary for the gray ICC profile.
 func GrayProfileDict() map[string]interface{} {
 	return map[string]interface{}{
-		"/N":         1,
+		"/N":         iccGrayN,
 		"/Alternate": "/DeviceGray",
 		"/Filter":    "/FlateDecode",
 		"/Length":    len(grayData),
@@ -88,11 +145,11 @@ func GrayProfileDict() map[string]interface{} {
 }
 
 func s15Fixed16(v float64) int32 {
-	return int32(v * 65536.0)
+	return int32(v * s15Fixed16Scale)
 }
 
 func align4(n int) int {
-	return (n + 3) & ^3
+	return (n + align4Mask) & ^align4Mask
 }
 
 type iccTag struct {
@@ -101,10 +158,10 @@ type iccTag struct {
 }
 
 func buildHeader(size int, deviceClass, colorSpace, pcs string) []byte {
-	hdr := make([]byte, 128)
+	hdr := make([]byte, iccHeaderSize)
 	binary.BigEndian.PutUint32(hdr[0:4], uint32(size))
-	copy(hdr[4:8], "appl")
-	binary.BigEndian.PutUint32(hdr[8:12], 0x02100000)
+	copy(hdr[4:8], iccCMMType)
+	binary.BigEndian.PutUint32(hdr[8:12], iccVersion)
 	copy(hdr[12:16], deviceClass)
 	copy(hdr[16:20], colorSpace)
 	copy(hdr[20:24], pcs)
@@ -115,19 +172,19 @@ func buildHeader(size int, deviceClass, colorSpace, pcs string) []byte {
 	binary.BigEndian.PutUint16(hdr[30:32], uint16(dt.Hour()))
 	binary.BigEndian.PutUint16(hdr[32:34], uint16(dt.Minute()))
 	binary.BigEndian.PutUint16(hdr[34:36], uint16(dt.Second()))
-	copy(hdr[36:40], "acsp")
-	copy(hdr[40:44], "APPL")
+	copy(hdr[36:40], iccSigACSP)
+	copy(hdr[40:44], iccSigAPPL)
 	binary.BigEndian.PutUint32(hdr[64:68], 0)
-	binary.BigEndian.PutUint32(hdr[68:72], uint32(s15Fixed16(0.9642)))
+	binary.BigEndian.PutUint32(hdr[68:72], uint32(s15Fixed16(xyzFactor)))
 	binary.BigEndian.PutUint32(hdr[72:76], uint32(s15Fixed16(1.0)))
-	binary.BigEndian.PutUint32(hdr[76:80], uint32(s15Fixed16(0.8249)))
-	copy(hdr[80:84], "appl")
+	binary.BigEndian.PutUint32(hdr[76:80], uint32(s15Fixed16(wZ)))
+	copy(hdr[80:84], iccCMMType)
 	return hdr
 }
 
 func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte {
-	tagTableSize := 4 + len(tags)*12
-	dataStart := 128 + tagTableSize
+	tagTableSize := iccTagCountSize + len(tags)*iccTagTableSize
+	dataStart := iccHeaderSize + tagTableSize
 	totalDataSize := 0
 	for _, t := range tags {
 		totalDataSize += align4(len(t.data))
@@ -138,16 +195,16 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 	buf := bytes.NewBuffer(hdr)
 
 	buf.Write([]byte{
-		byte(len(tags) >> 24), byte(len(tags) >> 16), byte(len(tags) >> 8), byte(len(tags)),
+		byte(len(tags) >> shift24), byte(len(tags) >> shift16), byte(len(tags) >> shift8), byte(len(tags)),
 	})
 	offset := uint32(dataStart)
 	for _, t := range tags {
 		buf.Write([]byte{t.sig[0], t.sig[1], t.sig[2], t.sig[3]})
 		buf.Write([]byte{
-			byte(offset >> 24), byte(offset >> 16), byte(offset >> 8), byte(offset),
+			byte(offset >> shift24), byte(offset >> shift16), byte(offset >> shift8), byte(offset),
 		})
 		buf.Write([]byte{
-			byte(len(t.data) >> 24), byte(len(t.data) >> 16), byte(len(t.data) >> 8), byte(len(t.data)),
+			byte(len(t.data) >> shift24), byte(len(t.data) >> shift16), byte(len(t.data) >> shift8), byte(len(t.data)),
 		})
 		offset += uint32(align4(len(t.data)))
 	}
@@ -164,8 +221,8 @@ func buildICCProfile(deviceClass, colorSpace, pcs string, tags []iccTag) []byte 
 // binary.Write errors are impossible with these inputs and are safely discarded.
 func buildDesc(text string) []byte {
 	var buf bytes.Buffer
-	buf.Grow(20 + len(text))
-	buf.Write([]byte("desc"))
+	buf.Grow(descBufExtra + len(text))
+	buf.Write([]byte(iccTagTypeDesc))
 	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
 	asciiCount := uint32(len(text) + 1)
 	_ = binary.Write(&buf, binary.BigEndian, asciiCount)
@@ -178,7 +235,7 @@ func buildDesc(text string) []byte {
 
 func buildXYZ(x, y, z float64) []byte {
 	var buf bytes.Buffer
-	buf.Write([]byte("XYZ "))
+	buf.Write([]byte(iccTagTypeXYZ))
 	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
 	_ = binary.Write(&buf, binary.BigEndian, s15Fixed16(x))
 	_ = binary.Write(&buf, binary.BigEndian, s15Fixed16(y))
@@ -186,37 +243,38 @@ func buildXYZ(x, y, z float64) []byte {
 	return buf.Bytes()
 }
 
-func buildCurve(gamma float64) []byte {
+func buildCurve() []byte {
 	var buf bytes.Buffer
-	buf.Write([]byte("curv"))
+	buf.Write([]byte(iccTagTypeCurv))
 	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
 	_ = binary.Write(&buf, binary.BigEndian, uint32(1))
-	_ = binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))
+	gamma := defaultGamma
+	_ = binary.Write(&buf, binary.BigEndian, uint16(gamma*gammaEncodeScale+gammaEncodeRoundOff))
 	return buf.Bytes()
 }
 
 func buildSRGB() []byte {
-	return buildICCProfile("mntr", "RGB ", "XYZ ",
+	return buildICCProfile(iccProfileClass, iccColorSpaceRGB, iccPCSXYZ,
 		[]iccTag{
-			{"desc", buildDesc("sRGB IEC61966-2.1")},
-			{"cprt", buildDesc("Copyright (c)")},
-			{"wtpt", buildXYZ(0.9642, 1.0, 0.8249)},
-			{"rXYZ", buildXYZ(0.4361, 0.2225, 0.0139)},
-			{"gXYZ", buildXYZ(0.3851, 0.7169, 0.0971)},
-			{"bXYZ", buildXYZ(0.1431, 0.0606, 0.7140)},
-			{"rTRC", buildCurve(2.2)},
-			{"gTRC", buildCurve(2.2)},
-			{"bTRC", buildCurve(2.2)},
+			{iccTagSigDesc, buildDesc("sRGB IEC61966-2.1")},
+			{iccTagSigCPRT, buildDesc("Copyright (c)")},
+			{iccTagSigWTPT, buildXYZ(wX, wY, wZ)},
+			{iccTagSigRXYZ, buildXYZ(rX, rY, rZ)},
+			{iccTagSigGXYZ, buildXYZ(gX, gY, gZ)},
+			{iccTagSigBXYZ, buildXYZ(bX, bY, bZ)},
+			{iccTagSigRTRC, buildCurve()},
+			{iccTagSigGTRC, buildCurve()},
+			{iccTagSigBTRC, buildCurve()},
 		})
 }
 
 func buildGray() []byte {
-	return buildICCProfile("mntr", "GRAY", "XYZ ",
+	return buildICCProfile(iccProfileClass, iccColorSpaceGray, iccPCSXYZ,
 		[]iccTag{
-			{"desc", buildDesc("Gray ICC profile")},
-			{"cprt", buildDesc("Copyright (c)")},
-			{"wtpt", buildXYZ(0.9642, 1.0, 0.8249)},
-			{"kTRC", buildCurve(2.2)},
+			{iccTagSigDesc, buildDesc("Gray ICC profile")},
+			{iccTagSigCPRT, buildDesc("Copyright (c)")},
+			{iccTagSigWTPT, buildXYZ(wX, wY, wZ)},
+			{iccTagSigKTRC, buildCurve()},
 		})
 }
 

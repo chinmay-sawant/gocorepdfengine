@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+const (
+	rgbHexLen    = 3
+	rrggbbHexLen = 6
+	colorMask    = 0xff
+	shift8       = 8
+	shift16      = 16
+	shift24      = 24
+)
+
 // RGB is a 0–1 RGB triple for PDF content operators (rg / RG).
 type RGB [3]float64
 
@@ -16,7 +25,7 @@ func ParseHex(s string) (RGB, error) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "#")
 	switch len(s) {
-	case 3:
+	case rgbHexLen:
 		r, err1 := strconv.ParseUint(string(s[0])+string(s[0]), 16, 8)
 		g, err2 := strconv.ParseUint(string(s[1])+string(s[1]), 16, 8)
 		b, err3 := strconv.ParseUint(string(s[2])+string(s[2]), 16, 8)
@@ -24,15 +33,15 @@ func ParseHex(s string) (RGB, error) {
 			return RGB{}, fmt.Errorf("invalid hex color %q", s)
 		}
 		return RGB{float64(r) / 255, float64(g) / 255, float64(b) / 255}, nil
-	case 6:
+	case rrggbbHexLen:
 		n, err := strconv.ParseUint(s, 16, 32)
 		if err != nil {
 			return RGB{}, fmt.Errorf("invalid hex color %q: %w", s, err)
 		}
 		return RGB{
-			float64((n>>16)&0xff) / 255,
-			float64((n>>8)&0xff) / 255,
-			float64(n&0xff) / 255,
+			float64((n>>shift16)&colorMask) / 255,
+			float64((n>>shift8)&colorMask) / 255,
+			float64(n&colorMask) / 255,
 		}, nil
 	default:
 		return RGB{}, fmt.Errorf("invalid hex color length %q", s)
@@ -48,20 +57,20 @@ func MustHex(s string) (RGB, error) {
 // Theme colours for contract-note layout. These are intentional package-level
 // configuration constants (BP-37), not mutable global state.
 var (
-	ThemeHeaderBG   RGB
-	ThemeHeaderFG   RGB
-	ThemeHeaderSub  RGB
-	ThemeSectionBG  RGB
-	ThemeSectionFG  RGB
-	ThemeTableHead  RGB
-	ThemeAltRow     RGB
-	ThemeInfoRow    RGB
-	ThemeSummaryBG  RGB
-	ThemeBuy        RGB
-	ThemeSell       RGB
-	ThemeLink       RGB
-	ThemeBlack      = RGB{0, 0, 0}
-	ThemeWhite      = RGB{1, 1, 1}
+	ThemeHeaderBG  RGB
+	ThemeHeaderFG  RGB
+	ThemeHeaderSub RGB
+	ThemeSectionBG RGB
+	ThemeSectionFG RGB
+	ThemeTableHead RGB
+	ThemeAltRow    RGB
+	ThemeInfoRow   RGB
+	ThemeSummaryBG RGB
+	ThemeBuy       RGB
+	ThemeSell      RGB
+	ThemeLink      RGB
+	ThemeBlack     = RGB{0, 0, 0}
+	ThemeWhite     = RGB{1, 1, 1}
 )
 
 func init() {

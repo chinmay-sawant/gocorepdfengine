@@ -11,6 +11,15 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/image"
 )
 
+const (
+	imgObjHint         = 8
+	avgCharWidthFactor = 0.52
+	grayLevel          = 0.85
+	watermarkXFactor   = 0.2
+	watermarkYFactor   = 0.3
+	half               = 0.5
+)
+
 // Point represents a 2D coordinate in PDF user-space units.
 type Point struct {
 	X, Y float64
@@ -39,18 +48,18 @@ type BorderStyle struct {
 // ContentBuilder accumulates PDF content-stream operations and tracks
 // font / image / marked-content identifiers used during layout.
 type ContentBuilder struct {
-	Stream       *content.Stream
-	FontRes      map[string]string
-	UsedFonts    map[string]bool
-	ImageObjects map[string]*ImageObj
-	MCID         int
+	Stream        *content.Stream
+	FontRes       map[string]string
+	UsedFonts     map[string]bool
+	ImageObjects  map[string]*ImageObj
+	MCID          int
 	Width, Height float64
 }
 
 // ImageObj pairs a decoded image with its raw bytes for embedding.
 type ImageObj struct {
-	Img   *image.Image
-	Data  []byte
+	Img  *image.Image
+	Data []byte
 }
 
 // NewContentBuilder creates a ContentBuilder for a page of the given dimensions.
@@ -59,7 +68,7 @@ func NewContentBuilder(width, height float64) *ContentBuilder {
 		Stream:       content.NewStream(),
 		FontRes:      make(map[string]string),
 		UsedFonts:    make(map[string]bool),
-		ImageObjects: make(map[string]*ImageObj, 8), // BP-52: size hint for expected images
+		ImageObjects: make(map[string]*ImageObj, imgObjHint), // BP-52: size hint for expected images
 		MCID:         0,
 		Width:        width,
 		Height:       height,
@@ -71,11 +80,11 @@ func fmtFloat(v float64) string {
 }
 
 func textWidth(text string, fontSize float64) float64 {
-	return float64(len(text)) * fontSize * 0.52
+	return float64(len(text)) * fontSize * avgCharWidthFactor
 }
 
 func charScale(fontSize float64) float64 {
-	return fontSize * 0.52
+	return fontSize * avgCharWidthFactor
 }
 
 // WrapText breaks text into lines that each fit within maxWidth at the given
@@ -187,13 +196,13 @@ func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 	fmt.Fprintf(&cb.Stream.Buf, "/Artifact <</Attached [/Top] /Type /Pagination >> BDC\n")
 	fmt.Fprintf(&cb.Stream.Buf, "q\n")
 	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg %s %s %s RG\n",
-		fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85),
-		fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85))
+		fmtFloat(grayLevel), fmtFloat(grayLevel), fmtFloat(grayLevel),
+		fmtFloat(grayLevel), fmtFloat(grayLevel), fmtFloat(grayLevel))
 	fmt.Fprintf(&cb.Stream.Buf, "BT\n")
 	fmt.Fprintf(&cb.Stream.Buf, "/%s 74 Tf\n", label)
 	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s %s %s Tm\n",
 		fmtFloat(cosA), fmtFloat(sinA), fmtFloat(-sinA), fmtFloat(cosA),
-		fmtFloat(pageW*0.2), fmtFloat(pageH*0.3))
+		fmtFloat(pageW*watermarkXFactor), fmtFloat(pageH*watermarkYFactor))
 	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
 	fmt.Fprintf(&cb.Stream.Buf, "ET\n")
 	fmt.Fprintf(&cb.Stream.Buf, "Q\n")
@@ -212,8 +221,8 @@ func (cb *ContentBuilder) PlaceImage(img *image.Image, objName string, x, y, w, 
 	}
 	dw := iw * scale
 	dh := ih * scale
-	dx := x + (w-dw)/2
-	dy := y + (h-dh)/2
+	dx := x + (w-dw)*half
+	dy := y + (h-dh)*half
 	fmt.Fprintf(&cb.Stream.Buf, "q\n")
 	fmt.Fprintf(&cb.Stream.Buf, "%s 0 0 %s %s %s cm\n", fmtFloat(dw), fmtFloat(dh), fmtFloat(dx), fmtFloat(dy))
 	cb.Stream.Do(objName)

@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+const (
+	propsPartCount = 8
+	hexColorLen    = 3
+)
+
 // Alignment controls horizontal text alignment within a cell.
 type Alignment int
 
@@ -33,8 +38,8 @@ type CellProps struct {
 // ParseProps parses an 8-field colon-separated property string into CellProps.
 func ParseProps(s string) (CellProps, error) {
 	parts := strings.Split(s, ":")
-	if len(parts) != 8 {
-		return CellProps{}, fmt.Errorf("props needs 8 colon-separated fields, got %d in %q", len(parts), s)
+	if len(parts) != propsPartCount {
+		return CellProps{}, fmt.Errorf("props needs %d colon-separated fields, got %d in %q", propsPartCount, len(parts), s)
 	}
 
 	p := CellProps{FontName: parts[0]}
@@ -45,7 +50,7 @@ func ParseProps(s string) (CellProps, error) {
 	}
 	p.FontSize = size
 
-	if len(parts[2]) == 3 {
+	if len(parts[2]) == hexColorLen {
 		p.Bold = parts[2][0] == '1'
 		p.Italic = parts[2][1] == '1'
 		p.Underline = parts[2][2] == '1'

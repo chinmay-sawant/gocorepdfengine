@@ -75,7 +75,7 @@ func WidthsArray(font *Font) []int {
 	if len(keys) == 0 {
 		return nil
 	}
-	scale := 1000.0 / float64(font.UnitsPerEm)
+	scale := ttfUPEm / float64(font.UnitsPerEm)
 
 	// Groups of contiguous CIDs that share the same width
 	type cidRange struct{ first, last, width int }
@@ -87,7 +87,7 @@ func WidthsArray(font *Font) []int {
 		if !ok {
 			continue
 		}
-		width := int(float64(g.Width)*scale + 0.5)
+		width := int(float64(g.Width)*scale + roundingHalf)
 		if n := len(ranges); n > 0 && ranges[n-1].width == width && ranges[n-1].last+1 == cid {
 			ranges[n-1].last = cid
 		} else {
@@ -95,7 +95,7 @@ func WidthsArray(font *Font) []int {
 		}
 	}
 
-	result := make([]int, 0, len(ranges)*3)
+	result := make([]int, 0, len(ranges)*widthRangeDim)
 	for _, r := range ranges {
 		result = append(result, r.first, r.last, r.width)
 	}

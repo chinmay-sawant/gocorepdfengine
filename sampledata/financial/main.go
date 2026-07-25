@@ -16,6 +16,8 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/render"
 )
 
+const outputFilePerm = 0o600
+
 func main() {
 	// Resolve JSON path relative to the project root.
 	pwd, _ := os.Getwd()
@@ -34,7 +36,7 @@ func main() {
 	}
 
 	outPath := filepath.Join(filepath.Dir(path), "financial_report_output.pdf")
-	if err := os.WriteFile(outPath, pdf, 0o644); err != nil {
+	if err := os.WriteFile(outPath, pdf, outputFilePerm); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Saved: %s (%d bytes)\n", outPath, len(pdf))

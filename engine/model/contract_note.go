@@ -10,6 +10,16 @@ import (
 	"strconv"
 )
 
+const (
+	buySellChoice  = 2
+	maxQtyAddend   = 50
+	lotSize        = 10
+	minBasePrice   = 100.0
+	maxPriceRange  = 3400.0
+	pricePrecision = 100
+	timeUnit       = 60
+)
+
 // ContractNote is the domain model for Zerodha-style contract notes.
 type ContractNote struct {
 	DocumentType string `json:"document_type"`
@@ -81,9 +91,9 @@ type Financials struct {
 }
 
 type Summary struct {
-	TotalTurnover      float64 `json:"total_turnover"`
-	Brokerage          float64 `json:"brokerage"`
-	RegulatoryCharges  float64 `json:"regulatory_charges"`
+	TotalTurnover     float64 `json:"total_turnover"`
+	Brokerage         float64 `json:"brokerage"`
+	RegulatoryCharges float64 `json:"regulatory_charges"`
 }
 
 type Audit struct {
@@ -95,7 +105,7 @@ type Audit struct {
 func LoadJSON(path string) (*ContractNote, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	var note ContractNote
 	if err := json.Unmarshal(data, &note); err != nil {
@@ -162,28 +172,29 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 	if n.ModeLabel == "retail" && len(n.Trades) > 0 && count <= len(n.Trades) {
 		return
 	}
-	rng := rand.New(rand.NewSource(seed)) // Deterministic seed for benchmark reproducibility (not security-sensitive).
+	// #nosec G404 -- Deterministic seed used for benchmark reproducibility, not security-sensitive.
+	rng := rand.New(rand.NewSource(seed))
 	trades := make([]Trade, count)
 	hour, mn, sec := 9, 15, 0
 	symCount := len(symbols)
 	for i := 0; i < count; i++ {
 		sym := symbols[rng.Intn(symCount)]
 		action := "BUY"
-		if rng.Intn(2) == 1 {
+		if rng.Intn(buySellChoice) == 1 {
 			action = "SELL"
 		}
-		qty := (rng.Intn(50) + 1) * 10
-		price := 100.0 + rng.Float64()*3400.0
-		price = float64(int(price*100)) / 100
+		qty := (rng.Intn(maxQtyAddend) + 1) * lotSize
+		price := minBasePrice + rng.Float64()*maxPriceRange
+		price = float64(int(price*pricePrecision)) / pricePrecision
 		total := float64(qty) * price
 
 		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, mn, sec)
 		sec++
-		if sec >= 60 {
+		if sec >= timeUnit {
 			sec = 0
 			mn++
 		}
-		if mn >= 60 {
+		if mn >= timeUnit {
 			mn = 0
 			hour++
 		}

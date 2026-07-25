@@ -11,14 +11,18 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+const (
+	decimalBase = 10
+)
+
 type ObjectID uint32
 
 type Mode uint32
 
 const (
-	ModePDF20     Mode = 1 << 0
-	ModePDFA4     Mode = 1 << 1
-	ModePDFUA2    Mode = 1 << 2
+	ModePDF20      Mode = 1 << 0
+	ModePDFA4      Mode = 1 << 1
+	ModePDFUA2     Mode = 1 << 2
 	ModeEmbedFonts Mode = 1 << 3
 )
 
@@ -120,10 +124,10 @@ func (d *Document) Build() []byte {
 	var objBuf []byte
 	for _, obj := range sorted {
 		objOffsets[obj.ID] = int64(enc.Len())
-		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.ID), 10)
+		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.ID), decimalBase)
 		_, _ = enc.Write(objBuf)
 		enc.WriteString(" ")
-		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.Gen), 10)
+		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.Gen), decimalBase)
 		_, _ = enc.Write(objBuf)
 		enc.WriteString(" obj\n")
 
@@ -142,8 +146,8 @@ func (d *Document) Build() []byte {
 			enc.WriteStream(dict, data.Data)
 			enc.WriteString("\n")
 		case []byte:
-		_, _ = enc.Write(data)
-				enc.WriteString("\n")
+			_, _ = enc.Write(data)
+			enc.WriteString("\n")
 		default:
 			enc.WriteString(fmt.Sprint(data))
 			enc.WriteString("\n")
@@ -157,7 +161,7 @@ func (d *Document) Build() []byte {
 	if d.TrailerInfo != nil && !d.HasMode(ModePDFA4) {
 		infoRef = maxID + 1
 		objOffsets[infoRef] = int64(enc.Len())
-		objBuf = strconv.AppendInt(objBuf[:0], int64(infoRef), 10)
+		objBuf = strconv.AppendInt(objBuf[:0], int64(infoRef), decimalBase)
 		_, _ = enc.Write(objBuf)
 		enc.WriteString(" 0 obj\n")
 		enc.WriteDict(d.TrailerInfo)

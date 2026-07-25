@@ -9,6 +9,17 @@ import (
 	"sync"
 )
 
+const (
+	nonASCIIThreshold = 128
+	octalShift2       = 6
+	octalShift1       = 3
+	octalMask         = 7
+	hexShift3         = 12
+	hexShift2         = 8
+	hexShift1         = 4
+	hexNibbleMask     = 0xF
+)
+
 var flateWriterPool = sync.Pool{
 	New: func() any { // returns *flate.Writer
 		w, _ := flate.NewWriter(nil, flate.BestSpeed)
@@ -68,11 +79,11 @@ func (s *Stream) Tj(text string) {
 		case '\t':
 			s.Buf.WriteString("\\t")
 		default:
-			if r >= 128 {
+			if r >= nonASCIIThreshold {
 				s.Buf.WriteByte('\\')
-				s.Buf.WriteByte('0' + byte(r>>6))
-				s.Buf.WriteByte('0' + byte((r>>3)&7))
-				s.Buf.WriteByte('0' + byte(r&7))
+				s.Buf.WriteByte('0' + byte(r>>octalShift2))
+				s.Buf.WriteByte('0' + byte((r>>octalShift1)&octalMask))
+				s.Buf.WriteByte('0' + byte(r&octalMask))
 			} else {
 				s.Buf.WriteRune(r)
 			}
@@ -86,10 +97,10 @@ func (s *Stream) TjCID(text string) {
 	const hex = "0123456789ABCDEF"
 	s.Buf.WriteByte('<')
 	for _, r := range text {
-		s.Buf.WriteByte(hex[(r>>12)&0xF])
-		s.Buf.WriteByte(hex[(r>>8)&0xF])
-		s.Buf.WriteByte(hex[(r>>4)&0xF])
-		s.Buf.WriteByte(hex[r&0xF])
+		s.Buf.WriteByte(hex[(r>>hexShift3)&hexNibbleMask])
+		s.Buf.WriteByte(hex[(r>>hexShift2)&hexNibbleMask])
+		s.Buf.WriteByte(hex[(r>>hexShift1)&hexNibbleMask])
+		s.Buf.WriteByte(hex[r&hexNibbleMask])
 	}
 	s.Buf.WriteString("> Tj\n")
 }
@@ -163,8 +174,16 @@ func (s *Stream) Bytes() []byte {
 // Compress compresses the stream content using Flate.
 func (s *Stream) Compress() error {
 	var compressed bytes.Buffer
-	w := flateWriterPool.Get().(*flate.Writer)
-	w.Reset(&compressed)
+	w, ok := flateWriterPool.Get().(*flate.Writer)
+	if !ok || w == nil {
+		var err error
+		w, err = flate.NewWriter(&compressed, flate.BestSpeed)
+		if err != nil {
+			return fmt.Errorf("content: compress: %w", err)
+		}
+	} else {
+		w.Reset(&compressed)
+	}
 	if _, err := w.Write(s.Buf.Bytes()); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
 		return fmt.Errorf("content: compress: %w", err) // cold path (error)

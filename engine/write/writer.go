@@ -13,6 +13,15 @@ import (
 	"time"
 )
 
+const (
+	decimalBase   = 10
+	xrefEntrySize = 20
+	xrefLineLen   = 10
+	nonASCII      = 128
+	secsPerHour   = 3600
+	secsPerMin    = 60
+)
+
 // Encoder accumulates a PDF file into an internal buffer, writing headers,
 // dictionaries, streams, cross-reference tables, and the trailer.
 type Encoder struct {
@@ -26,7 +35,11 @@ func NewEncoder() *Encoder {
 
 // Write implements io.Writer by appending bytes to the encoder buffer.
 func (e *Encoder) Write(p []byte) (int, error) {
-	return e.buf.Write(p)
+	n, err := e.buf.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("write: %w", err)
+	}
+	return n, nil
 }
 
 // WriteString appends a plain string to the encoder buffer.
@@ -86,7 +99,7 @@ func (e *Encoder) writeValue(v interface{}) {
 	case int:
 		e.buf.WriteString(strconv.Itoa(val))
 	case int64:
-		e.buf.WriteString(strconv.FormatInt(val, 10))
+		e.buf.WriteString(strconv.FormatInt(val, decimalBase))
 	case float64:
 		e.buf.WriteString(strconv.FormatFloat(val, 'f', -1, 64))
 	case bool:
@@ -120,12 +133,12 @@ func (e *Encoder) WriteStream(dict map[string]interface{}, data []byte) {
 // WriteXref writes a cross-reference table from a slice of byte offsets.
 func (e *Encoder) WriteXref(offsets []int64) {
 	e.buf.WriteString("xref\n0 ")
-	e.buf.Write(strconv.AppendInt(nil, int64(len(offsets)), 10))
+	e.buf.Write(strconv.AppendInt(nil, int64(len(offsets)), decimalBase))
 	e.buf.WriteByte('\n')
-	xrefBuf := make([]byte, 0, 20)
+	xrefBuf := make([]byte, 0, xrefEntrySize)
 	for i, off := range offsets {
-		xrefBuf = strconv.AppendInt(xrefBuf[:0], off, 10)
-		padLen := 10 - len(xrefBuf)
+		xrefBuf = strconv.AppendInt(xrefBuf[:0], off, decimalBase)
+		padLen := xrefLineLen - len(xrefBuf)
 		if padLen > 0 {
 			e.buf.WriteString("0000000000"[:padLen])
 		}
@@ -191,7 +204,7 @@ func StringLit(s string) string {
 		case '\t':
 			buf.WriteString("\\t")
 		default:
-			if r >= 128 {
+			if r >= nonASCII {
 				fmt.Fprintf(&buf, "\\%03o", r)
 			} else {
 				buf.WriteRune(r)
@@ -219,8 +232,8 @@ func DateString(t time.Time) string {
 	return fmt.Sprintf("D:%s%c%02d'%02d'", // cold path (one-time init)
 		t.Format("20060102150405"),
 		sign,
-		offset/3600,
-		(offset%3600)/60,
+		offset/secsPerHour,
+		(offset%secsPerHour)/secsPerMin,
 	)
 }
 

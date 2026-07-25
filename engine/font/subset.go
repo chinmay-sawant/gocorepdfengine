@@ -43,7 +43,7 @@ func (f *Font) UsedChars() []rune {
 
 // GenerateSubset generates a subset TTF from the font raw data containing only the used glyphs.
 func (f *Font) GenerateSubset() error {
-	if len(f.RawData) < 12 {
+	if len(f.RawData) < ttfDirOffset {
 		return errors.New("font: no raw data to subset")
 	}
 
@@ -74,7 +74,7 @@ func (f *Font) GenerateSubset() error {
 		return fmt.Errorf("font: subset generation error: %w", err)
 	}
 
-	if len(subset) < 12 {
+	if len(subset) < ttfDirOffset {
 		return errors.New("font: generated subset is invalid (too short)")
 	}
 
@@ -91,7 +91,7 @@ func buildUsedGIDSet(f *Font) map[uint16]bool {
 }
 
 func pad4(n uint32) uint32 {
-	return (n + 3) & ^uint32(3)
+	return (n + pad4Mask) & ^uint32(pad4Mask)
 }
 
 type glyphEntry struct {
@@ -106,6 +106,25 @@ type glyphInfo struct {
 	offset uint32
 	length uint32
 	width  uint16
+}
+
+func readGlyphOffsetLength(oldGID uint16, locaTable []byte, locaFormat uint16) (uint32, uint32) {
+	if locaFormat == 0 {
+		off := uint32(oldGID) * ttfWordSize
+		if uint32(len(locaTable)) >= off+4 {
+			glyphOffset := uint32(binary.BigEndian.Uint16(locaTable[off:])) * ttfWordSize
+			nextOffset := uint32(binary.BigEndian.Uint16(locaTable[off+ttfWordSize:])) * ttfWordSize
+			return glyphOffset, nextOffset - glyphOffset
+		}
+	} else {
+		off := uint32(oldGID) * ttfDWordSize
+		if uint32(len(locaTable)) >= off+8 {
+			glyphOffset := binary.BigEndian.Uint32(locaTable[off:])
+			nextOffset := binary.BigEndian.Uint32(locaTable[off+4:])
+			return glyphOffset, nextOffset - glyphOffset
+		}
+	}
+	return 0, 0
 }
 
 func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte, locaFormat uint16, numHMetrics uint16, f *Font) ([]glyphEntry, map[uint16]uint16) {
@@ -123,21 +142,7 @@ func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte,
 		var glyphOffset uint32
 
 		if glyfTable != nil && locaTable != nil {
-			var nextOffset uint32
-			if locaFormat == 0 {
-				off := uint32(oldGID) * 2
-				if uint32(len(locaTable)) >= off+4 {
-					glyphOffset = uint32(binary.BigEndian.Uint16(locaTable[off:])) * 2
-					nextOffset = uint32(binary.BigEndian.Uint16(locaTable[off+2:])) * 2
-				}
-			} else {
-				off := uint32(oldGID) * 4
-				if uint32(len(locaTable)) >= off+8 {
-					glyphOffset = binary.BigEndian.Uint32(locaTable[off:])
-					nextOffset = binary.BigEndian.Uint32(locaTable[off+4:])
-				}
-			}
-			length = nextOffset - glyphOffset
+			glyphOffset, length = readGlyphOffsetLength(oldGID, locaTable, locaFormat)
 			if length > 0 && uint32(len(glyfTable)) >= glyphOffset+length {
 				totalGlyphSize += pad4(length)
 			} else {
@@ -161,7 +166,7 @@ func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte,
 
 	glyphDataBuf := make([]byte, totalGlyphSize)
 	var dataOffset uint32
-	var glyphs []glyphEntry
+	var glyphs = make([]glyphEntry, 0, len(infos))
 	for _, info := range infos {
 		var data []byte
 		if info.length > 0 {
@@ -177,59 +182,27 @@ func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte,
 	return glyphs, gidMap
 }
 
-func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
-	gidList := make([]uint16, 0, len(usedGIDs))
-	for gid := range usedGIDs {
-		gidList = append(gidList, gid)
-	}
-	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
-
-	maxpData, _ := findTable(orig, "maxp")
-	oldNumGlyphs := uint16(0)
-	if len(maxpData) >= 6 {
-		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[4:])
-	}
-
-	headData, _ := findTable(orig, "head")
-	locaFormat := uint16(0)
-	if len(headData) >= 52 {
-		locaFormat = binary.BigEndian.Uint16(headData[50:])
-	}
-
-	hheaData, _ := findTable(orig, "hhea")
-	numHMetrics := oldNumGlyphs
-	if len(hheaData) >= 36 {
-		numHMetrics = binary.BigEndian.Uint16(hheaData[34:])
-	}
-
-	glyfTable, _ := findTable(orig, "glyf")
-	locaTable, _ := findTable(orig, "loca")
-	hmtxTable, _ := findTable(orig, "hmtx")
-
-	glyphs, gidMap := collectGlyphInfos(gidList, glyfTable, locaTable, hmtxTable, locaFormat, numHMetrics, f)
-
-	newNumGlyphs := uint16(len(glyphs))
-
+func buildGlyphTables(glyphs []glyphEntry, locaFormat uint16) ([]byte, []byte, []byte) {
 	var newLocaData []byte
 	if locaFormat == 0 {
 		var glyphOffset uint32
 		for _, ge := range glyphs {
-			v := uint16(glyphOffset / 2)
-			newLocaData = append(newLocaData, byte(v>>8), byte(v))
+			v := uint16(glyphOffset / ttfWordSize)
+			newLocaData = append(newLocaData, byte(v>>shift8), byte(v))
 			glyphOffset += pad4(ge.length)
-			v = uint16(glyphOffset / 2)
-			newLocaData = append(newLocaData, byte(v>>8), byte(v))
+			v = uint16(glyphOffset / ttfWordSize)
+			newLocaData = append(newLocaData, byte(v>>shift8), byte(v))
 		}
 	} else {
 		var glyphOffset uint32
 		for _, ge := range glyphs {
 			newLocaData = append(newLocaData,
-				byte(glyphOffset>>24), byte(glyphOffset>>16),
-				byte(glyphOffset>>8), byte(glyphOffset))
+				byte(glyphOffset>>shift24), byte(glyphOffset>>shift16),
+				byte(glyphOffset>>shift8), byte(glyphOffset))
 			glyphOffset += pad4(ge.length)
 			newLocaData = append(newLocaData,
-				byte(glyphOffset>>24), byte(glyphOffset>>16),
-				byte(glyphOffset>>8), byte(glyphOffset))
+				byte(glyphOffset>>shift24), byte(glyphOffset>>shift16),
+				byte(glyphOffset>>shift8), byte(glyphOffset))
 		}
 	}
 
@@ -242,35 +215,118 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		}
 	}
 
-	newHmtxData := make([]byte, 0, len(glyphs)*4)
+	newHmtxData := make([]byte, 0, len(glyphs)*hmtxEntrySize)
 	for _, ge := range glyphs {
-		newHmtxData = append(newHmtxData, byte(ge.width>>8), byte(ge.width), 0, 0)
+		newHmtxData = append(newHmtxData, byte(ge.width>>shift8), byte(ge.width), 0, 0)
 	}
 
+	return newLocaData, newGlyfData, newHmtxData
+}
+
+func buildSubsetCMap(f *Font, gidMap map[uint16]uint16) []byte {
+	usedChars := f.UsedChars()
+	subtable := buildFormat4CMap(usedChars, gidMap)
+	headerLen := uint32(cmapHeaderLen + cmapEncRecSize)
+	cmap := make([]byte, headerLen+uint32(len(subtable)))
+	cmap[0] = 0
+	cmap[1] = 0
+	cmap[ttfWordSize] = 0
+	cmap[ttfWordSize+1] = 1
+	cmap[ttfDWordSize] = 0
+	cmap[ttfDWordSize+1] = 3
+	cmap[ttfMaxpMinLen] = 0
+	cmap[ttfMaxpMinLen+1] = 1
+	cmap[cmapEncRecSize] = byte(headerLen >> shift24)
+	cmap[cmapEncRecSize+1] = byte(headerLen >> shift16)
+	cmap[cmapEncRecSize+ttfWordSize] = byte(headerLen >> shift8)
+	cmap[cmapEncRecSize+ttfWordSize+1] = byte(headerLen)
+	copy(cmap[headerLen:], subtable)
+	return cmap
+}
+
+func buildTTFHeader(numTables uint16) []byte {
+	entrySelector := uint16(0)
+	for 1<<(entrySelector+1) <= numTables {
+		entrySelector++
+	}
+	searchRange := uint16(1<<entrySelector) * ttfEntrySize
+	rangeShift := numTables*ttfEntrySize - searchRange
+
+	header := make([]byte, ttfDirOffset)
+	header[0] = 0
+	header[1] = 0
+	header[2] = 1
+	header[3] = 0
+	header[ttfDWordSize] = byte(numTables >> shift8)
+	header[ttfDWordSize+1] = byte(numTables)
+	header[ttfMaxpMinLen] = byte(searchRange >> shift8)
+	header[ttfMaxpMinLen+1] = byte(searchRange)
+	header[8] = byte(entrySelector >> shift8)
+	header[9] = byte(entrySelector)
+	header[10] = byte(rangeShift >> shift8)
+	header[11] = byte(rangeShift)
+	return header
+}
+
+func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
+	gidList := make([]uint16, 0, len(usedGIDs))
+	for gid := range usedGIDs {
+		gidList = append(gidList, gid)
+	}
+	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
+
+	maxpData, _ := findTable(orig, "maxp")
+	oldNumGlyphs := uint16(0)
+	if len(maxpData) >= ttfMaxpMinLen {
+		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[ttfDWordSize:])
+	}
+
+	headData, _ := findTable(orig, "head")
+	locaFormat := uint16(0)
+	if len(headData) >= headLocaFmtOff+ttfWordSize {
+		locaFormat = binary.BigEndian.Uint16(headData[headLocaFmtOff:])
+	}
+
+	hheaData, _ := findTable(orig, "hhea")
+	numHMetrics := oldNumGlyphs
+	if len(hheaData) >= ttfHheaMinLen {
+		numHMetrics = binary.BigEndian.Uint16(hheaData[ttfHheaMinLen-ttfWordSize:])
+	}
+
+	glyfTable, _ := findTable(orig, "glyf")
+	locaTable, _ := findTable(orig, "loca")
+	hmtxTable, _ := findTable(orig, "hmtx")
+
+	glyphs, gidMap := collectGlyphInfos(gidList, glyfTable, locaTable, hmtxTable, locaFormat, numHMetrics, f)
+
+	newNumGlyphs := uint16(len(glyphs))
+
+	newLocaData, newGlyfData, newHmtxData := buildGlyphTables(glyphs, locaFormat)
+
 	var newMaxpData []byte
-	if len(maxpData) >= 6 {
+	if len(maxpData) >= ttfMaxpMinLen {
 		newMaxpData = make([]byte, len(maxpData))
 		copy(newMaxpData, maxpData)
-		newMaxpData[4] = byte(newNumGlyphs >> 8)
-		newMaxpData[5] = byte(newNumGlyphs)
+		newMaxpData[ttfDWordSize] = byte(newNumGlyphs >> shift8)
+		newMaxpData[ttfMaxpMinLen-1] = byte(newNumGlyphs)
 	} else {
-		newMaxpData = make([]byte, 32)
+		newMaxpData = make([]byte, maxpFactoryLen)
 		newMaxpData[0] = 0
 		newMaxpData[1] = 0
-		newMaxpData[2] = 1
-		newMaxpData[3] = 0
-		newMaxpData[4] = byte(newNumGlyphs >> 8)
-		newMaxpData[5] = byte(newNumGlyphs)
-		newMaxpData[6] = byte(newNumGlyphs >> 8)
-		newMaxpData[7] = byte(newNumGlyphs)
+		newMaxpData[ttfWordSize] = 1
+		newMaxpData[ttfWordSize+1] = 0
+		newMaxpData[ttfDWordSize] = byte(newNumGlyphs >> shift8)
+		newMaxpData[ttfMaxpMinLen-1] = byte(newNumGlyphs)
+		newMaxpData[ttfMaxpMinLen] = byte(newNumGlyphs >> shift8)
+		newMaxpData[ttfMaxpMinLen+1] = byte(newNumGlyphs)
 	}
 
 	var newHeadData []byte
-	if len(headData) >= 54 {
+	if len(headData) >= ttfHeadMinLen {
 		newHeadData = make([]byte, len(headData))
 		copy(newHeadData, headData)
-		newHeadData[50] = byte(locaFormat >> 8)
-		newHeadData[51] = byte(locaFormat)
+		newHeadData[headLocaFmtOff] = byte(locaFormat >> shift8)
+		newHeadData[headLocaFmtOff+1] = byte(locaFormat)
 		newHeadData[8] = 0
 		newHeadData[9] = 0
 		newHeadData[10] = 0
@@ -280,36 +336,16 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	}
 
 	var newHheaData []byte
-	if len(hheaData) >= 36 {
+	if len(hheaData) >= ttfHheaMinLen {
 		newHheaData = make([]byte, len(hheaData))
 		copy(newHheaData, hheaData)
-		newHheaData[34] = byte(newNumGlyphs >> 8)
-		newHheaData[35] = byte(newNumGlyphs)
+		newHheaData[ttfHheaMinLen-ttfWordSize] = byte(newNumGlyphs >> shift8)
+		newHheaData[ttfHheaMinLen-1] = byte(newNumGlyphs)
 	} else {
 		return nil, errors.New("font: hhea table missing")
 	}
 
-	var newCMapData []byte
-	{
-		usedChars := f.UsedChars()
-		subtable := buildFormat4CMap(usedChars, gidMap)
-		headerLen := uint32(4 + 8)
-		cmap := make([]byte, headerLen+uint32(len(subtable)))
-		cmap[0] = 0
-		cmap[1] = 0
-		cmap[2] = 0
-		cmap[3] = 1
-		cmap[4] = 0
-		cmap[5] = 3
-		cmap[6] = 0
-		cmap[7] = 1
-		cmap[8] = byte(headerLen >> 24)
-		cmap[9] = byte(headerLen >> 16)
-		cmap[10] = byte(headerLen >> 8)
-		cmap[11] = byte(headerLen)
-		copy(cmap[headerLen:], subtable)
-		newCMapData = cmap
-	}
+	newCMapData := buildSubsetCMap(f, gidMap)
 
 	findTableData := func(tag string) []byte {
 		d, err := findTable(orig, tag)
@@ -338,11 +374,11 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	addTable("name", findTableData("name"))
 	addTable("cmap", newCMapData)
 	postData := findTableData("post")
-	if len(postData) >= 34 {
+	if len(postData) >= ttfPostNameLen {
 		newPostData := make([]byte, len(postData))
 		copy(newPostData, postData)
-		newPostData[32] = byte(newNumGlyphs >> 8)
-		newPostData[33] = byte(newNumGlyphs)
+		newPostData[ttfPostNameLen-ttfWordSize] = byte(newNumGlyphs >> shift8)
+		newPostData[ttfPostNameLen-1] = byte(newNumGlyphs)
 		postData = newPostData
 	}
 	addTable("post", postData)
@@ -359,27 +395,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	addTable("cvt ", cvt)
 
 	numTables := uint16(len(tables))
-
-	entrySelector := uint16(0)
-	for 1<<(entrySelector+1) <= numTables {
-		entrySelector++
-	}
-	searchRange := uint16(1 << entrySelector) * 16
-	rangeShift := numTables*16 - searchRange
-
-	header := make([]byte, 12)
-	header[0] = 0
-	header[1] = 0
-	header[2] = 1
-	header[3] = 0
-	header[4] = byte(numTables >> 8)
-	header[5] = byte(numTables)
-	header[6] = byte(searchRange >> 8)
-	header[7] = byte(searchRange)
-	header[8] = byte(entrySelector >> 8)
-	header[9] = byte(entrySelector)
-	header[10] = byte(rangeShift >> 8)
-	header[11] = byte(rangeShift)
+	header := buildTTFHeader(numTables)
 
 	type tableInfo struct {
 		tag    string
@@ -388,8 +404,8 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		length uint32
 	}
 
-	var tableInfos []tableInfo
-	off := uint32(12) + uint32(numTables)*16
+	tableInfos := make([]tableInfo, 0, len(tables))
+	off := uint32(ttfDirOffset) + uint32(numTables)*ttfEntrySize
 	for _, t := range tables {
 		length := uint32(len(t.data))
 		tableInfos = append(tableInfos, tableInfo{
@@ -401,18 +417,18 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	out := make([]byte, off)
 	copy(out, header)
 
-	dirBase := uint32(12)
+	dirBase := uint32(ttfDirOffset)
 	for _, ti := range tableInfos {
 		copy(out[dirBase:], ti.tag)
-		out[dirBase+8] = byte(ti.offset >> 24)
-		out[dirBase+9] = byte(ti.offset >> 16)
-		out[dirBase+10] = byte(ti.offset >> 8)
+		out[dirBase+8] = byte(ti.offset >> shift24)
+		out[dirBase+9] = byte(ti.offset >> shift16)
+		out[dirBase+10] = byte(ti.offset >> shift8)
 		out[dirBase+11] = byte(ti.offset)
-		out[dirBase+12] = byte(ti.length >> 24)
-		out[dirBase+13] = byte(ti.length >> 16)
-		out[dirBase+14] = byte(ti.length >> 8)
+		out[dirBase+12] = byte(ti.length >> shift24)
+		out[dirBase+13] = byte(ti.length >> shift16)
+		out[dirBase+14] = byte(ti.length >> shift8)
 		out[dirBase+15] = byte(ti.length)
-		dirBase += 16
+		dirBase += ttfEntrySize
 	}
 
 	for _, ti := range tableInfos {
@@ -421,12 +437,12 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 
 	// Calculate and set checkSumAdjustment
 	checksum := calcFileChecksum(out)
-	adjustment := uint32(0xB1B0AFBA) - checksum
+	adjustment := uint32(ttfOffsetMagic) - checksum
 	headOff := findTableOffset(out, "head")
 	if headOff != 0 {
-		out[headOff+8] = byte(adjustment >> 24)
-		out[headOff+9] = byte(adjustment >> 16)
-		out[headOff+10] = byte(adjustment >> 8)
+		out[headOff+8] = byte(adjustment >> shift24)
+		out[headOff+9] = byte(adjustment >> shift16)
+		out[headOff+10] = byte(adjustment >> shift8)
 		out[headOff+11] = byte(adjustment)
 	}
 
@@ -442,12 +458,12 @@ func calcFileChecksum(data []byte) uint32 {
 }
 
 func findTableOffset(data []byte, tag string) uint32 {
-	if len(data) < 12 {
+	if len(data) < ttfDirOffset {
 		return 0
 	}
-	numTables := binary.BigEndian.Uint16(data[4:])
+	numTables := binary.BigEndian.Uint16(data[ttfDWordSize:])
 	for i := uint16(0); i < numTables; i++ {
-		base := uint32(12) + uint32(i)*16
+		base := uint32(ttfDirOffset) + uint32(i)*ttfEntrySize
 		if string(data[base:base+4]) == tag {
 			return binary.BigEndian.Uint32(data[base+8:])
 		}
@@ -505,75 +521,75 @@ func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
 	startCodes[segCount-1] = 0xFFFF
 	idDeltas[segCount-1] = 1
 
-	var glyphIDArray []uint16
+	glyphIDArray := make([]uint16, 0, len(sorted))
 	for _, r := range sorted {
 		glyphIDArray = append(glyphIDArray, gidMap[r])
 	}
 
-	headerLen := uint16(14)
-	endCodesLen := uint16(segCount) * 2
-	startCodesLen := uint16(segCount) * 2
-	deltasLen := uint16(segCount) * 2
-	rangeOffsetsLen := uint16(segCount) * 2
-	glyphArrayLen := uint16(len(glyphIDArray)) * 2
+	headerLen := uint16(cmapF4BaseOffset)
+	endCodesLen := uint16(segCount) * ttfWordSize
+	startCodesLen := uint16(segCount) * ttfWordSize
+	deltasLen := uint16(segCount) * ttfWordSize
+	rangeOffsetsLen := uint16(segCount) * ttfWordSize
+	glyphArrayLen := uint16(len(glyphIDArray)) * ttfWordSize
 
-	totalLength := headerLen + endCodesLen + 2 + startCodesLen + deltasLen + rangeOffsetsLen + glyphArrayLen
+	totalLength := headerLen + endCodesLen + cmapF4ReservedPad + startCodesLen + deltasLen + rangeOffsetsLen + glyphArrayLen
 
 	data := make([]byte, totalLength)
 
 	data[0] = 0
 	data[1] = 4
-	data[2] = byte(totalLength >> 8)
-	data[3] = byte(totalLength)
+	data[ttfWordSize] = byte(totalLength >> shift8)
+	data[ttfDWordSize-1] = byte(totalLength)
 	data[4] = 0
 	data[5] = 0
-	segCountX2 := uint16(segCount) * 2
-	data[6] = byte(segCountX2 >> 8)
-	data[7] = byte(segCountX2)
+	segCountX2 := uint16(segCount) * ttfWordSize
+	data[ttfMaxpMinLen] = byte(segCountX2 >> shift8)
+	data[ttfMaxpMinLen+1] = byte(segCountX2)
 
 	srEntrySelector := uint16(0)
 	for 1<<(srEntrySelector+1) <= uint16(segCount) {
 		srEntrySelector++
 	}
-	srSearchRangeBytes := uint16(1 << srEntrySelector) * 2
-	data[8] = byte(srSearchRangeBytes >> 8)
+	srSearchRangeBytes := uint16(1<<srEntrySelector) * ttfWordSize
+	data[8] = byte(srSearchRangeBytes >> shift8)
 	data[9] = byte(srSearchRangeBytes)
-	data[10] = byte(srEntrySelector >> 8)
+	data[10] = byte(srEntrySelector >> shift8)
 	data[11] = byte(srEntrySelector)
-	v := uint16(segCount)*2 - srSearchRangeBytes
-	data[12] = byte(v >> 8)
+	v := uint16(segCount)*ttfWordSize - srSearchRangeBytes
+	data[12] = byte(v >> shift8)
 	data[13] = byte(v)
 
-	off := uint16(14)
+	off := uint16(cmapF4BaseOffset)
 	for i := 0; i < segCount; i++ {
-		data[off] = byte(endCodes[i] >> 8)
+		data[off] = byte(endCodes[i] >> shift8)
 		data[off+1] = byte(endCodes[i])
-		off += 2
+		off += ttfWordSize
 	}
 	data[off] = 0
 	data[off+1] = 0
-	off += 2
+	off += ttfWordSize
 	for i := 0; i < segCount; i++ {
-		data[off] = byte(startCodes[i] >> 8)
+		data[off] = byte(startCodes[i] >> shift8)
 		data[off+1] = byte(startCodes[i])
-		off += 2
+		off += ttfWordSize
 	}
 	for i := 0; i < segCount; i++ {
-		data[off] = byte(uint16(idDeltas[i]) >> 8)
+		data[off] = byte(uint16(idDeltas[i]) >> shift8)
 		data[off+1] = byte(uint16(idDeltas[i]))
-		off += 2
+		off += ttfWordSize
 	}
 
 	for i := 0; i < segCount; i++ {
 		data[off] = 0
 		data[off+1] = 0
-		off += 2
+		off += ttfWordSize
 	}
 
 	for _, gid := range glyphIDArray {
-		data[off] = byte(gid >> 8)
+		data[off] = byte(gid >> shift8)
 		data[off+1] = byte(gid)
-		off += 2
+		off += ttfWordSize
 	}
 
 	return data
@@ -581,25 +597,25 @@ func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
 
 func buildEmptyFormat4CMap() []byte {
 	segCount := uint16(1)
-	segCountX2 := segCount * 2
-	totalLength := uint16(14 + 2 + 2 + 2 + 2 + 0)
+	segCountX2 := segCount * ttfWordSize
+	totalLength := uint16(cmapF4BaseOffset + cmapF4ReservedPad + ttfWordSize + ttfWordSize + ttfWordSize + 0)
 	data := make([]byte, totalLength)
 	data[0] = 0
-	data[1] = 4
-	data[2] = byte(totalLength >> 8)
-	data[3] = byte(totalLength)
-	data[4] = 0
-	data[5] = 0
-	data[6] = byte(segCountX2 >> 8)
-	data[7] = byte(segCountX2)
+	data[1] = cmapFmt4
+	data[ttfWordSize] = byte(totalLength >> shift8)
+	data[ttfDWordSize-1] = byte(totalLength)
+	data[ttfDWordSize] = 0
+	data[ttfDWordSize+1] = 0
+	data[ttfMaxpMinLen] = byte(segCountX2 >> shift8)
+	data[ttfMaxpMinLen+1] = byte(segCountX2)
 	data[8] = 0
-	data[9] = 2
+	data[9] = ttfWordSize
 	data[10] = 0
 	data[11] = 0
 	data[12] = 0
 	data[13] = 0
-	data[14] = 0xFF
-	data[15] = 0xFF
+	data[cmapF4BaseOffset] = 0xFF
+	data[cmapF4BaseOffset+1] = 0xFF
 	data[16] = 0
 	data[17] = 0
 	data[18] = 0xFF
@@ -610,4 +626,3 @@ func buildEmptyFormat4CMap() []byte {
 	data[23] = 0
 	return data
 }
-

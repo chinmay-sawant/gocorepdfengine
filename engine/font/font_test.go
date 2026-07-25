@@ -236,6 +236,7 @@ func TestRegistry(t *testing.T) {
 	got := r.Get("MyFont")
 	if got == nil {
 		t.Fatal("Get returned nil after Register")
+		return
 	}
 	if got.Name != "MyFont" {
 		t.Errorf("got.Name = %q, want %q", got.Name, "MyFont")
@@ -260,6 +261,7 @@ func TestRegistryStandardFont(t *testing.T) {
 	}
 	if font == nil {
 		t.Fatal("RegisterStandardFont returned nil font")
+		return
 	}
 	if font.UnitsPerEm == 0 {
 		t.Error("font.UnitsPerEm is 0")

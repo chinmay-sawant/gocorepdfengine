@@ -3,18 +3,18 @@ package font
 import "fmt"
 
 var liberationMap = map[string]string{
-	"Helvetica":            "LiberationSans-Regular",
-	"Helvetica-Bold":       "LiberationSans-Bold",
-	"Helvetica-Oblique":    "LiberationSans-Italic",
+	"Helvetica":             "LiberationSans-Regular",
+	"Helvetica-Bold":        "LiberationSans-Bold",
+	"Helvetica-Oblique":     "LiberationSans-Italic",
 	"Helvetica-BoldOblique": "LiberationSans-BoldItalic",
-	"Times-Roman":          "LiberationSerif-Regular",
-	"Times-Bold":           "LiberationSerif-Bold",
-	"Times-Italic":         "LiberationSerif-Italic",
-	"Times-BoldItalic":     "LiberationSerif-BoldItalic",
-	"Courier":              "LiberationMono-Regular",
-	"Courier-Bold":         "LiberationMono-Bold",
-	"Courier-Oblique":      "LiberationMono-Italic",
-	"Courier-BoldOblique":  "LiberationMono-BoldItalic",
+	"Times-Roman":           "LiberationSerif-Regular",
+	"Times-Bold":            "LiberationSerif-Bold",
+	"Times-Italic":          "LiberationSerif-Italic",
+	"Times-BoldItalic":      "LiberationSerif-BoldItalic",
+	"Courier":               "LiberationMono-Regular",
+	"Courier-Bold":          "LiberationMono-Bold",
+	"Courier-Oblique":       "LiberationMono-Italic",
+	"Courier-BoldOblique":   "LiberationMono-BoldItalic",
 }
 
 // LiberationFontFor returns the Liberation font name for the given standard font name.
@@ -27,18 +27,18 @@ func LiberationFontFor(standardName string) (string, bool) {
 func LiberationPaths() map[string]string {
 	base := "/usr/share/fonts/truetype/liberation"
 	return map[string]string{
-		"LiberationSans-Regular":    base + "/LiberationSans-Regular.ttf",
-		"LiberationSans-Bold":       base + "/LiberationSans-Bold.ttf",
-		"LiberationSans-Italic":     base + "/LiberationSans-Italic.ttf",
-		"LiberationSans-BoldItalic": base + "/LiberationSans-BoldItalic.ttf",
-		"LiberationSerif-Regular":   base + "/LiberationSerif-Regular.ttf",
-		"LiberationSerif-Bold":      base + "/LiberationSerif-Bold.ttf",
-		"LiberationSerif-Italic":    base + "/LiberationSerif-Italic.ttf",
+		"LiberationSans-Regular":     base + "/LiberationSans-Regular.ttf",
+		"LiberationSans-Bold":        base + "/LiberationSans-Bold.ttf",
+		"LiberationSans-Italic":      base + "/LiberationSans-Italic.ttf",
+		"LiberationSans-BoldItalic":  base + "/LiberationSans-BoldItalic.ttf",
+		"LiberationSerif-Regular":    base + "/LiberationSerif-Regular.ttf",
+		"LiberationSerif-Bold":       base + "/LiberationSerif-Bold.ttf",
+		"LiberationSerif-Italic":     base + "/LiberationSerif-Italic.ttf",
 		"LiberationSerif-BoldItalic": base + "/LiberationSerif-BoldItalic.ttf",
-		"LiberationMono-Regular":    base + "/LiberationMono-Regular.ttf",
-		"LiberationMono-Bold":       base + "/LiberationMono-Bold.ttf",
-		"LiberationMono-Italic":     base + "/LiberationMono-Italic.ttf",
-		"LiberationMono-BoldItalic": base + "/LiberationMono-BoldItalic.ttf",
+		"LiberationMono-Regular":     base + "/LiberationMono-Regular.ttf",
+		"LiberationMono-Bold":        base + "/LiberationMono-Bold.ttf",
+		"LiberationMono-Italic":      base + "/LiberationMono-Italic.ttf",
+		"LiberationMono-BoldItalic":  base + "/LiberationMono-BoldItalic.ttf",
 	}
 }
 
@@ -49,7 +49,7 @@ type Registry struct {
 // NewRegistry creates a new font registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		fonts: make(map[string]*Font, 12), // BP-52: size hint for expected std fonts
+		fonts: make(map[string]*Font, stdFontCountHint),
 	}
 }
 

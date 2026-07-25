@@ -9,6 +9,11 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/doc"
 )
 
+const (
+	decimalBase    = 10
+	pairMultiplier = 2
+)
+
 // StructType is a PDF structure type name (e.g. /Document, /Sect, /P).
 type StructType string
 
@@ -76,7 +81,7 @@ func Namespace() map[string]interface{} {
 // in the Namespaces array.
 func NamespaceRef(id doc.ObjectID) string {
 	var refBuf []byte
-	refBuf = strconv.AppendInt(refBuf[:0], int64(id), 10)
+	refBuf = strconv.AppendInt(refBuf[:0], int64(id), decimalBase)
 	return string(refBuf) + " 0 R"
 }
 
@@ -84,11 +89,11 @@ func NamespaceRef(id doc.ObjectID) string {
 // references for its /K (kids), /ParentTree, and /Namespaces entries.
 func StructTreeRootDict(kidsRef, parentTreeRef, nsRef doc.ObjectID) map[string]interface{} {
 	var refBuf []byte
-	refBuf = strconv.AppendInt(refBuf[:0], int64(kidsRef), 10)
+	refBuf = strconv.AppendInt(refBuf[:0], int64(kidsRef), decimalBase)
 	k := string(refBuf) + " 0 R"
-	refBuf = strconv.AppendInt(refBuf[:0], int64(parentTreeRef), 10)
+	refBuf = strconv.AppendInt(refBuf[:0], int64(parentTreeRef), decimalBase)
 	pt := string(refBuf) + " 0 R"
-	refBuf = strconv.AppendInt(refBuf[:0], int64(nsRef), 10)
+	refBuf = strconv.AppendInt(refBuf[:0], int64(nsRef), decimalBase)
 	ns := string(refBuf) + " 0 R"
 	return map[string]interface{}{
 		"/Type":       "/StructTreeRoot",
@@ -106,11 +111,11 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 	d["/S"] = string(se.Type)
 
 	if se.Parent != 0 {
-		refBuf = strconv.AppendInt(refBuf[:0], int64(se.Parent), 10)
+		refBuf = strconv.AppendInt(refBuf[:0], int64(se.Parent), decimalBase)
 		d["/P"] = string(refBuf) + " 0 R"
 	}
 	if se.PageRef != 0 {
-		refBuf = strconv.AppendInt(refBuf[:0], int64(se.PageRef), 10)
+		refBuf = strconv.AppendInt(refBuf[:0], int64(se.PageRef), decimalBase)
 		d["/Pg"] = string(refBuf) + " 0 R"
 	}
 	if se.Title != "" {
@@ -123,7 +128,7 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 		d["/Lang"] = "(" + se.Lang + ")"
 	}
 	if se.NamespaceRef != 0 {
-		refBuf = strconv.AppendInt(refBuf[:0], int64(se.NamespaceRef), 10)
+		refBuf = strconv.AppendInt(refBuf[:0], int64(se.NamespaceRef), decimalBase)
 		d["/NS"] = string(refBuf) + " 0 R"
 	}
 
@@ -132,9 +137,9 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 		for _, kid := range se.Kids {
 			switch {
 			case kid.OBJR != nil:
-				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.OBJR.ObjRef), 10)
+				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.OBJR.ObjRef), decimalBase)
 				objStr := string(refBuf) + " 0 R"
-				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.OBJR.PageRef), 10)
+				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.OBJR.PageRef), decimalBase)
 				pgStr := string(refBuf) + " 0 R"
 				kArray = append(kArray, map[string]interface{}{
 					"/Type": "/OBJR",
@@ -144,7 +149,7 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 			case kid.IsMCID:
 				kArray = append(kArray, kid.MCID)
 			default:
-				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.Ref), 10)
+				refBuf = strconv.AppendInt(refBuf[:0], int64(kid.Ref), decimalBase)
 				kArray = append(kArray, string(refBuf)+" 0 R")
 			}
 		}
@@ -171,17 +176,17 @@ func ParentTreeDict(nums map[int][]doc.ObjectID, annots map[int]doc.ObjectID) ma
 	}
 	sort.Ints(keys)
 
-	numPairs := make([]interface{}, 0, len(keys)*2)
+	numPairs := make([]interface{}, 0, len(keys)*pairMultiplier)
 	for _, k := range keys {
 		if refs, ok := nums[k]; ok {
 			refList := make([]interface{}, 0, len(refs))
 			for _, ref := range refs {
-				refBuf = strconv.AppendInt(refBuf[:0], int64(ref), 10)
+				refBuf = strconv.AppendInt(refBuf[:0], int64(ref), decimalBase)
 				refList = append(refList, string(refBuf)+" 0 R")
 			}
 			numPairs = append(numPairs, k, refList)
 		} else if ref, ok := annots[k]; ok {
-			refBuf = strconv.AppendInt(refBuf[:0], int64(ref), 10)
+			refBuf = strconv.AppendInt(refBuf[:0], int64(ref), decimalBase)
 			numPairs = append(numPairs, k, string(refBuf)+" 0 R")
 		}
 	}

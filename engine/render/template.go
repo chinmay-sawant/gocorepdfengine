@@ -13,6 +13,14 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
 
+const (
+	rowHeightMultiplier = 2
+	rowHeightBase       = 12
+	minRowHeight        = 36
+	jpegMarkerByte1     = 0xFF
+	jpegMarkerByte2     = 0xD8
+)
+
 // TemplatePDF renders a model.PDFTemplate (tables, title, images, watermark)
 // into a multi-page PDF binary by driving engine.GenerateDocument.
 func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
@@ -84,7 +92,7 @@ func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 		docTitle = t.Title.Text
 	}
 
-	return engine.GenerateDocument(engine.DocumentConfig{
+	pdf, err := engine.GenerateDocument(engine.DocumentConfig{
 		Width:      pageW,
 		Height:     pageH,
 		Mode:       mode,
@@ -97,6 +105,10 @@ func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 		UsedText:   used,
 		FooterText: footerText,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("generate document: %w", err)
+	}
+	return pdf, nil
 }
 
 func pageDimensions(cfg *model.Config) (float64, float64) {
@@ -153,9 +165,9 @@ func titleLayout(title *model.Title, contentW float64) *layout.TableLayout {
 	}
 
 	p, _ := layout.ParseProps(title.Props)
-	rowH := p.FontSize*2 + 12
-	if rowH < 36 {
-		rowH = 36
+	rowH := p.FontSize*rowHeightMultiplier + rowHeightBase
+	if rowH < minRowHeight {
+		rowH = minRowHeight
 	}
 
 	tl.Rows = append(tl.Rows, layout.Row{
@@ -228,7 +240,7 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
 			if c.Image != nil && c.Image.ImageData != "" {
 				if raw, ok := b64Cache[c.Image.ImageData]; ok {
-					isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
+					isJPEG := len(raw) > 2 && raw[0] == jpegMarkerByte1 && raw[1] == jpegMarkerByte2
 					lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
 				} else {
 					r.Cells = append(r.Cells, lc)

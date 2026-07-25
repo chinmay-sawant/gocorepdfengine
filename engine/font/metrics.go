@@ -6,7 +6,7 @@ import (
 
 func hex04(v uint16) string {
 	const hex = "0123456789ABCDEF"
-	return string([]byte{hex[v>>12], hex[(v>>8)&0xF], hex[(v>>4)&0xF], hex[v&0xF]})
+	return string([]byte{hex[v>>shift12], hex[(v>>shift8)&0xF], hex[(v>>shift4)&0xF], hex[v&0xF]})
 }
 
 // ToUnicodeCMap builds a ToUnicode CMap stream for the font.
@@ -36,7 +36,7 @@ func (f *Font) ToUnicodeCMap() []byte {
 	}
 	ranges = append(ranges, bfRange{startCID: uint16(rs), endCID: uint16(prev)})
 
-	cmap := make([]byte, 0, 1024)
+	cmap := make([]byte, 0, ttfCmapBufSize)
 
 	appendStr := func(s string) {
 		cmap = append(cmap, []byte(s)...)
@@ -81,14 +81,14 @@ func (f *Font) BuildCIDToGIDMap() []byte {
 		}
 		if f.SubGIDMap != nil {
 			if newGID, ok := f.SubGIDMap[f.cmap[r]]; ok {
-				i := cid * 2
-				data[i] = byte(newGID >> 8)
+				i := cid * ttfWordSize
+				data[i] = byte(newGID >> shift8)
 				data[i+1] = byte(newGID)
 			}
 		} else {
-			i := cid * 2
+			i := cid * ttfWordSize
 			v := f.cmap[r]
-			data[i] = byte(v >> 8)
+			data[i] = byte(v >> shift8)
 			data[i+1] = byte(v)
 		}
 	}
