@@ -166,32 +166,32 @@ func buildDesc(text string) []byte {
 	var buf bytes.Buffer
 	buf.Grow(20 + len(text))
 	buf.Write([]byte("desc"))
-	binary.Write(&buf, binary.BigEndian, uint32(0))
+	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
 	asciiCount := uint32(len(text) + 1)
-	binary.Write(&buf, binary.BigEndian, asciiCount)
+	_ = binary.Write(&buf, binary.BigEndian, asciiCount)
 	buf.WriteString(text)
 	buf.WriteByte(0)
-	binary.Write(&buf, binary.BigEndian, uint32(0))
-	binary.Write(&buf, binary.BigEndian, uint16(0))
+	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
+	_ = binary.Write(&buf, binary.BigEndian, uint16(0))
 	return buf.Bytes()
 }
 
 func buildXYZ(x, y, z float64) []byte {
 	var buf bytes.Buffer
 	buf.Write([]byte("XYZ "))
-	binary.Write(&buf, binary.BigEndian, uint32(0))
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(x))
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(y))
-	binary.Write(&buf, binary.BigEndian, s15Fixed16(z))
+	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
+	_ = binary.Write(&buf, binary.BigEndian, s15Fixed16(x))
+	_ = binary.Write(&buf, binary.BigEndian, s15Fixed16(y))
+	_ = binary.Write(&buf, binary.BigEndian, s15Fixed16(z))
 	return buf.Bytes()
 }
 
 func buildCurve(gamma float64) []byte {
 	var buf bytes.Buffer
 	buf.Write([]byte("curv"))
-	binary.Write(&buf, binary.BigEndian, uint32(0))
-	binary.Write(&buf, binary.BigEndian, uint32(1))
-	binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))
+	_ = binary.Write(&buf, binary.BigEndian, uint32(0))
+	_ = binary.Write(&buf, binary.BigEndian, uint32(1))
+	_ = binary.Write(&buf, binary.BigEndian, uint16(gamma*256.0+0.5))
 	return buf.Bytes()
 }
 

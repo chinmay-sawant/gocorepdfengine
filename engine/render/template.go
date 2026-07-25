@@ -191,38 +191,7 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 	hexCache := make(map[string]color.RGB)
 	b64Cache := make(map[string][]byte)
 	propsCache := make(map[string]layout.CellProps)
-	for _, row := range td.Rows {
-		for _, c := range row.Row {
-			if c.Props != "" {
-				if _, ok := propsCache[c.Props]; !ok {
-					if p, err := layout.ParseProps(c.Props); err == nil {
-						propsCache[c.Props] = p
-					}
-				}
-			}
-			if c.BGColor != "" {
-				if _, ok := hexCache[c.BGColor]; !ok {
-					if parsed, err := color.ParseHex(c.BGColor); err == nil {
-						hexCache[c.BGColor] = parsed
-					}
-				}
-			}
-			if c.TextColor != "" {
-				if _, ok := hexCache[c.TextColor]; !ok {
-					if parsed, err := color.ParseHex(c.TextColor); err == nil {
-						hexCache[c.TextColor] = parsed
-					}
-				}
-			}
-			if c.Image != nil && c.Image.ImageData != "" {
-				if _, ok := b64Cache[c.Image.ImageData]; !ok {
-					if raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData); err == nil && len(raw) > 0 {
-						b64Cache[c.Image.ImageData] = raw
-					}
-				}
-			}
-		}
-	}
+	buildTableCaches(td, hexCache, b64Cache, propsCache)
 	for i, row := range td.Rows {
 		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {
@@ -344,6 +313,41 @@ func cellFromProps(text string, p layout.CellProps, tc *[3]float64, fill *color.
 		style.BorderBottom = &layout.BorderStyle{Width: bw, Color: bc}
 	}
 	return layout.Cell{Text: text, Style: style, W: width, H: rowH}
+}
+
+func buildTableCaches(td *model.TableDef, hexCache map[string]color.RGB, b64Cache map[string][]byte, propsCache map[string]layout.CellProps) {
+	for _, row := range td.Rows {
+		for _, c := range row.Row {
+			if c.Props != "" {
+				if _, ok := propsCache[c.Props]; !ok {
+					if p, err := layout.ParseProps(c.Props); err == nil {
+						propsCache[c.Props] = p
+					}
+				}
+			}
+			if c.BGColor != "" {
+				if _, ok := hexCache[c.BGColor]; !ok {
+					if parsed, err := color.ParseHex(c.BGColor); err == nil {
+						hexCache[c.BGColor] = parsed
+					}
+				}
+			}
+			if c.TextColor != "" {
+				if _, ok := hexCache[c.TextColor]; !ok {
+					if parsed, err := color.ParseHex(c.TextColor); err == nil {
+						hexCache[c.TextColor] = parsed
+					}
+				}
+			}
+			if c.Image != nil && c.Image.ImageData != "" {
+				if _, ok := b64Cache[c.Image.ImageData]; !ok {
+					if raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData); err == nil && len(raw) > 0 {
+						b64Cache[c.Image.ImageData] = raw
+					}
+				}
+			}
+		}
+	}
 }
 
 func collectUsed(t *model.PDFTemplate) string {

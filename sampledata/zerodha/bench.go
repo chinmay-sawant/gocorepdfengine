@@ -31,6 +31,10 @@ import (
 		flagMemProfile = flag.String("memprofile", "", "write heap profile to file")
 	)
 
+type latencyStats struct {
+	count, sumNs, minNs, maxNs int64
+}
+
 	// set by main.go / main_nocomply.go
 	var benchCompliant bool
 
@@ -195,32 +199,8 @@ func runBenchmark() error {
 
 	opts := render.Options{Compliant: benchCompliant}
 	var retailPDF, activePDF, hftPDF []byte
-	if os.Getenv("BENCH_WARMUP") != "0" {
-		fmt.Println("Warm-up runs...")
-		r := retailNote
-		a := activeNote
-		h := hftNote
-		if !cached {
-			r = prepareNote(baseRetail, 0, benchSeed)
-			a = prepareNote(baseActive, 40, benchSeed+1)
-			h = prepareNote(baseHFT, 2000, benchSeed+2)
-		}
-		retailPDF, err = render.PDF(r, opts)
-		if err != nil {
-			return fmt.Errorf("retail warm-up: %w", err)
-		}
-		activePDF, err = render.PDF(a, opts)
-		if err != nil {
-			return fmt.Errorf("active warm-up: %w", err)
-		}
-		hftPDF, err = render.PDF(h, opts)
-		if err != nil {
-			return fmt.Errorf("hft warm-up: %w", err)
-		}
-		fmt.Printf("  Retail PDF: %d bytes (%.2f KB)\n", len(retailPDF), float64(len(retailPDF))/1024)
-		fmt.Printf("  Active PDF: %d bytes (%.2f KB)\n", len(activePDF), float64(len(activePDF))/1024)
-		fmt.Printf("  HFT PDF:    %d bytes (%.2f KB)\n", len(hftPDF), float64(len(hftPDF))/1024)
-		fmt.Println()
+	if err := runWarmup(cached, baseRetail, baseActive, baseHFT, benchSeed, opts, retailNote, activeNote, hftNote, &retailPDF, &activePDF, &hftPDF); err != nil {
+		return err
 	}
 
 	const (
@@ -228,30 +208,8 @@ func runBenchmark() error {
 		workloadActive
 		workloadHFT
 	)
-	schedule := make([]int, iterations)
-	retailTarget := iterations * 80 / 100
-	activeTarget := iterations * 15 / 100
-	for i := range schedule {
-		switch {
-		case i < retailTarget:
-			schedule[i] = workloadRetail
-		case i < retailTarget+activeTarget:
-			schedule[i] = workloadActive
-		default:
-			schedule[i] = workloadHFT
-		}
-	}
-	// deterministic shuffle
-	rng := new(simpleRNG)
-	rng.seed = uint64(benchSeed)
-	for i := len(schedule) - 1; i > 0; i-- {
-		j := int(rng.next() % uint64(i+1))
-		schedule[i], schedule[j] = schedule[j], schedule[i]
-	}
+	schedule := buildSchedule(iterations, benchSeed)
 
-	type latencyStats struct {
-		count, sumNs, minNs, maxNs int64
-	}
 	jobs := make(chan int, iterations)
 	errCh := make(chan error, iterations)
 	workerStats := make([]latencyStats, numWorkers)
@@ -337,19 +295,7 @@ func runBenchmark() error {
 	}
 
 	var totalCount, totalSumNs, minNs, maxNs int64
-	for _, stats := range workerStats {
-		if stats.count == 0 {
-			continue
-		}
-		totalCount += stats.count
-		totalSumNs += stats.sumNs
-		if minNs == 0 || (stats.minNs > 0 && stats.minNs < minNs) {
-			minNs = stats.minNs
-		}
-		if stats.maxNs > maxNs {
-			maxNs = stats.maxNs
-		}
-	}
+	totalCount, totalSumNs, minNs, maxNs = aggregateStats(workerStats)
 	if totalCount == 0 {
 		return errors.New("no results collected")
 	}
@@ -391,6 +337,79 @@ func runBenchmark() error {
 
 	fmt.Println("=== Done ===")
 	return nil
+}
+
+func buildSchedule(iterations int, benchSeed int64) []int {
+	schedule := make([]int, iterations)
+	retailTarget := iterations * 80 / 100
+	activeTarget := iterations * 15 / 100
+	for i := range schedule {
+		switch {
+		case i < retailTarget:
+			schedule[i] = 0
+		case i < retailTarget+activeTarget:
+			schedule[i] = 1
+		default:
+			schedule[i] = 2
+		}
+	}
+	rng := new(simpleRNG)
+	rng.seed = uint64(benchSeed)
+	for i := len(schedule) - 1; i > 0; i-- {
+		j := int(rng.next() % uint64(i+1))
+		schedule[i], schedule[j] = schedule[j], schedule[i]
+	}
+	return schedule
+}
+
+func runWarmup(cached bool, baseRetail, baseActive, baseHFT *model.ContractNote, benchSeed int64, opts render.Options, retailNote, activeNote, hftNote *model.ContractNote, retailPDF, activePDF, hftPDF *[]byte) error {
+	if os.Getenv("BENCH_WARMUP") == "0" {
+		return nil
+	}
+	fmt.Println("Warm-up runs...")
+	r := retailNote
+	a := activeNote
+	h := hftNote
+	if !cached {
+		r = prepareNote(baseRetail, 0, benchSeed)
+		a = prepareNote(baseActive, 40, benchSeed+1)
+		h = prepareNote(baseHFT, 2000, benchSeed+2)
+	}
+	var err error
+	*retailPDF, err = render.PDF(r, opts)
+	if err != nil {
+		return fmt.Errorf("retail warm-up: %w", err)
+	}
+	*activePDF, err = render.PDF(a, opts)
+	if err != nil {
+		return fmt.Errorf("active warm-up: %w", err)
+	}
+	*hftPDF, err = render.PDF(h, opts)
+	if err != nil {
+		return fmt.Errorf("hft warm-up: %w", err)
+	}
+	fmt.Printf("  Retail PDF: %d bytes (%.2f KB)\n", len(*retailPDF), float64(len(*retailPDF))/1024)
+	fmt.Printf("  Active PDF: %d bytes (%.2f KB)\n", len(*activePDF), float64(len(*activePDF))/1024)
+	fmt.Printf("  HFT PDF:    %d bytes (%.2f KB)\n", len(*hftPDF), float64(len(*hftPDF))/1024)
+	fmt.Println()
+	return nil
+}
+
+func aggregateStats(workerStats []latencyStats) (totalCount, totalSumNs, minNs, maxNs int64) {
+	for _, stats := range workerStats {
+		if stats.count == 0 {
+			continue
+		}
+		totalCount += stats.count
+		totalSumNs += stats.sumNs
+		if minNs == 0 || (stats.minNs > 0 && stats.minNs < minNs) {
+			minNs = stats.minNs
+		}
+		if stats.maxNs > maxNs {
+			maxNs = stats.maxNs
+		}
+	}
+	return
 }
 
 func outputName(base string) string {

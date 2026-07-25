@@ -155,101 +155,8 @@ func Generate(config Config) (Result, error) {
 		fontName = "Helvetica"
 	}
 
-	if isA4 {
-		reg := font.NewRegistry()
-		loadedFont, err := reg.RegisterStandardFont(fontName, "")
-		if err != nil {
-			// Fallback: use LiberationSans-Regular directly
-			loadedFont, err = font.LoadFromPath("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")
-			if err != nil {
-				// Last resort: use a minimal hardcoded font name
-				loadedFont = nil
-			}
-		}
-
-		if loadedFont != nil {
-			libName := loadedFont.Name
-
-			// Mark all used characters from the content.
-			for _, r := range config.Text {
-				loadedFont.AddChar(r)
-			}
-			// Ensure common characters are in the glyph map for width consistency.
-			for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |()$#%&*+<=>?@[]{!}_" {
-				loadedFont.AddChar(r)
-			}
-
-			// Generate subset so embedded font only contains used glyphs.
-			fontData := loadedFont.RawData
-			if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
-				fontData = loadedFont.SubsetData
-			}
-
-			// FontFile2 stream with compressed font data
-			compressed := compressData(fontData)
-			d.AddObjectAt(fontFile2ID, &write.Stream{
-				Dict: map[string]interface{}{
-					"/Length": len(compressed),
-					"/Filter": "/FlateDecode",
-				},
-				Data: compressed,
-			})
-
-			// ToUnicode CMap
-			tuData := loadedFont.ToUnicodeCMap()
-			d.AddObjectAt(toUnicodeID, &write.Stream{
-				Dict: map[string]interface{}{"/Length": len(tuData)},
-				Data: tuData,
-			})
-
-			// CIDToGIDMap stream mapping CIDs → subset GIDs
-			cidMapData := loadedFont.BuildCIDToGIDMap()
-			compressedMap := compressData(cidMapData)
-			d.AddObjectAt(cidToGIDMapID, &write.Stream{
-				Dict: map[string]interface{}{
-					"/Length": len(compressedMap),
-					"/Filter": "/FlateDecode",
-				},
-				Data: compressedMap,
-			})
-
-			// Use font emit functions
-			d.AddObjectAt(descriptorID, font.DescriptorDict(loadedFont, fontFile2ID))
-			d.AddObjectAt(cidFontID, font.CIDFontDict(loadedFont, descriptorID, cidToGIDMapID))
-			d.AddObjectAt(fontRef, font.Dict(libName, cidFontID, toUnicodeID))
-		} else {
-			// Fallback: hardcoded minimal font chain
-			libName := "LiberationSans-Regular"
-
-			fakeFont := &font.Font{
-				Name:       libName,
-				Flags:      32,
-				FontBBox:   [4]int16{-1000, -1000, 1000, 1000},
-				ItalicAngle: 0,
-				Ascent:     1000,
-				Descent:    -200,
-				CapHeight:  700,
-				StemV:      80,
-				XHeight:    500,
-			}
-
-			d.AddObjectAt(fontFile2ID, &write.Stream{
-				Dict: map[string]interface{}{"/Length": 0},
-				Data: []byte{},
-			})
-			tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
-			d.AddObjectAt(toUnicodeID, &write.Stream{Dict: map[string]interface{}{"/Length": len(tuData)}, Data: tuData})
-			d.AddObjectAt(descriptorID, font.DescriptorDict(fakeFont, fontFile2ID))
-			d.AddObjectAt(cidFontID, font.CIDFontDict(fakeFont, descriptorID, 0))
-			d.AddObjectAt(fontRef, font.Dict(libName, cidFontID, toUnicodeID))
-		}
-	} else {
-		d.AddObjectAt(fontRef, map[string]interface{}{
-			"/Type":    "/Font",
-			"/Subtype": "/Type1",
-			"/BaseFont": "/" + fontName,
-		})
-	}
+	addFontObjects(d, fontName, config.Text, isA4,
+		fontRef, cidFontID, descriptorID, fontFile2ID, toUnicodeID, cidToGIDMapID)
 
 	// === Page objects ===
 	pg := page.NewPage(config.Width, config.Height)
@@ -363,4 +270,90 @@ func Generate(config Config) (Result, error) {
 	d.SetCatalog(catalogID)
 
 	return Result{Data: d.Build()}, nil
+}
+
+func addFontObjects(d *doc.Document, fontName, text string, isA4 bool, fontRef, cidFontID, descriptorID, fontFile2ID, toUnicodeID, cidToGIDMapID doc.ObjectID) {
+	if !isA4 {
+		d.AddObjectAt(fontRef, map[string]interface{}{
+			"/Type":    "/Font",
+			"/Subtype": "/Type1",
+			"/BaseFont": "/" + fontName,
+		})
+		return
+	}
+
+	reg := font.NewRegistry()
+	loadedFont, err := reg.RegisterStandardFont(fontName, "")
+	if err != nil {
+		loadedFont, err = font.LoadFromPath("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")
+		if err != nil {
+			loadedFont = nil
+		}
+	}
+
+	if loadedFont != nil {
+		for _, r := range text {
+			loadedFont.AddChar(r)
+		}
+		for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |()$#%&*+<=>?@[]{!}_" {
+			loadedFont.AddChar(r)
+		}
+
+		fontData := loadedFont.RawData
+		if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
+			fontData = loadedFont.SubsetData
+		}
+
+		compressed := compressData(fontData)
+		d.AddObjectAt(fontFile2ID, &write.Stream{
+			Dict: map[string]interface{}{
+				"/Length": len(compressed),
+				"/Filter": "/FlateDecode",
+			},
+			Data: compressed,
+		})
+
+		tuData := loadedFont.ToUnicodeCMap()
+		d.AddObjectAt(toUnicodeID, &write.Stream{
+			Dict: map[string]interface{}{"/Length": len(tuData)},
+			Data: tuData,
+		})
+
+		cidMapData := loadedFont.BuildCIDToGIDMap()
+		compressedMap := compressData(cidMapData)
+		d.AddObjectAt(cidToGIDMapID, &write.Stream{
+			Dict: map[string]interface{}{
+				"/Length": len(compressedMap),
+				"/Filter": "/FlateDecode",
+			},
+			Data: compressedMap,
+		})
+
+		d.AddObjectAt(descriptorID, font.DescriptorDict(loadedFont, fontFile2ID))
+		d.AddObjectAt(cidFontID, font.CIDFontDict(loadedFont, descriptorID, cidToGIDMapID))
+		d.AddObjectAt(fontRef, font.Dict(loadedFont.Name, cidFontID, toUnicodeID))
+		return
+	}
+
+	libName := "LiberationSans-Regular"
+	fakeFont := &font.Font{
+		Name:       libName,
+		Flags:      32,
+		FontBBox:   [4]int16{-1000, -1000, 1000, 1000},
+		ItalicAngle: 0,
+		Ascent:     1000,
+		Descent:    -200,
+		CapHeight:  700,
+		StemV:      80,
+		XHeight:    500,
+	}
+	d.AddObjectAt(fontFile2ID, &write.Stream{
+		Dict: map[string]interface{}{"/Length": 0},
+		Data: []byte{},
+	})
+	tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
+	d.AddObjectAt(toUnicodeID, &write.Stream{Dict: map[string]interface{}{"/Length": len(tuData)}, Data: tuData})
+	d.AddObjectAt(descriptorID, font.DescriptorDict(fakeFont, fontFile2ID))
+	d.AddObjectAt(cidFontID, font.CIDFontDict(fakeFont, descriptorID, 0))
+	d.AddObjectAt(fontRef, font.Dict(libName, cidFontID, toUnicodeID))
 }

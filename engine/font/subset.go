@@ -7,6 +7,8 @@ import (
 	"sort"
 )
 
+const tableCVT = "cvt "
+
 // AddChar adds a single rune to the font subset.
 func (f *Font) AddChar(r rune) {
 	if f.Glyphs == nil {
@@ -63,8 +65,8 @@ func (f *Font) GenerateSubset() error {
 		"head": true, "hhea": true, "hmtx": true,
 		"maxp": true, "glyf": true, "loca": true,
 		"cmap": true, "name": true, "OS/2": true,
-		"post": true, "cvt ": true, "prep": true,
-		"fpgm": true, "cvt": true,
+		"post": true, "prep": true,
+		"fpgm": true, tableCVT: true, "cvt": true,
 	}
 
 	subset, err := buildSubsetTTF(f, f.RawData, entries, usedGIDs, requiredTags)
@@ -92,55 +94,27 @@ func pad4(n uint32) uint32 {
 	return (n + 3) & ^uint32(3)
 }
 
-func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
-	gidList := make([]uint16, 0, len(usedGIDs))
-	for gid := range usedGIDs {
-		gidList = append(gidList, gid)
-	}
-	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
+type glyphEntry struct {
+	gid    uint16
+	data   []byte
+	length uint32
+	width  uint16
+}
 
-	maxpData, _ := findTable(orig, "maxp")
-	oldNumGlyphs := uint16(0)
-	if len(maxpData) >= 6 {
-		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[4:])
-	}
+type glyphInfo struct {
+	gid    uint16
+	offset uint32
+	length uint32
+	width  uint16
+}
 
-	headData, _ := findTable(orig, "head")
-	locaFormat := uint16(0)
-	if len(headData) >= 52 {
-		locaFormat = binary.BigEndian.Uint16(headData[50:])
-	}
-
-	hheaData, _ := findTable(orig, "hhea")
-	numHMetrics := oldNumGlyphs
-	if len(hheaData) >= 36 {
-		numHMetrics = binary.BigEndian.Uint16(hheaData[34:])
-	}
-
-	glyfTable, _ := findTable(orig, "glyf")
-	locaTable, _ := findTable(orig, "loca")
-	hmtxTable, _ := findTable(orig, "hmtx")
-
-	type glyphEntry struct {
-		gid    uint16
-		data   []byte
-		length uint32
-		width  uint16
-	}
-	var glyphs []glyphEntry
-
+func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte, locaFormat uint16, numHMetrics uint16, f *Font) ([]glyphEntry, map[uint16]uint16) {
 	gidMap := make(map[uint16]uint16, len(gidList))
 	for newID, oldGID := range gidList {
 		gidMap[oldGID] = uint16(newID)
 	}
 	f.SubGIDMap = gidMap
 
-	type glyphInfo struct {
-		gid    uint16
-		offset uint32
-		length uint32
-		width  uint16
-	}
 	infos := make([]glyphInfo, 0, len(gidList))
 	var totalGlyphSize uint32
 
@@ -187,6 +161,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 
 	glyphDataBuf := make([]byte, totalGlyphSize)
 	var dataOffset uint32
+	var glyphs []glyphEntry
 	for _, info := range infos {
 		var data []byte
 		if info.length > 0 {
@@ -198,6 +173,40 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		})
 		dataOffset += pad4(info.length)
 	}
+
+	return glyphs, gidMap
+}
+
+func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
+	gidList := make([]uint16, 0, len(usedGIDs))
+	for gid := range usedGIDs {
+		gidList = append(gidList, gid)
+	}
+	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
+
+	maxpData, _ := findTable(orig, "maxp")
+	oldNumGlyphs := uint16(0)
+	if len(maxpData) >= 6 {
+		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[4:])
+	}
+
+	headData, _ := findTable(orig, "head")
+	locaFormat := uint16(0)
+	if len(headData) >= 52 {
+		locaFormat = binary.BigEndian.Uint16(headData[50:])
+	}
+
+	hheaData, _ := findTable(orig, "hhea")
+	numHMetrics := oldNumGlyphs
+	if len(hheaData) >= 36 {
+		numHMetrics = binary.BigEndian.Uint16(hheaData[34:])
+	}
+
+	glyfTable, _ := findTable(orig, "glyf")
+	locaTable, _ := findTable(orig, "loca")
+	hmtxTable, _ := findTable(orig, "hmtx")
+
+	glyphs, gidMap := collectGlyphInfos(gidList, glyfTable, locaTable, hmtxTable, locaFormat, numHMetrics, f)
 
 	newNumGlyphs := uint16(len(glyphs))
 
