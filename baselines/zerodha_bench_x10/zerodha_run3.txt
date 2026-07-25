@@ -1,0 +1,39 @@
+=== Zerodha Gold Standard Benchmark (gocorepdfengine) ===
+Pipeline: JSON → model → layout (colors) → GenerateDocument
+Mode: compliant (PDF/A-4 + PDF/UA-2 flags)
+Cache: ON  (models/trades expanded once; reused per iteration)
+Workload Mix: 80% Retail | 15% Active | 5% HFT
+
+OS: linux, Arch: amd64, NumCPU: 24, Go: go1.26.4
+GOMAXPROCS: 24
+Running 5000 iterations using 48 workers...
+
+Building cached models (JSON + ExpandTrades)...
+  Retail trades: 2 | Active: 40 | HFT: 2000
+Warm-up runs...
+  Retail PDF: 112757 bytes (110.11 KB)
+  Active PDF: 151827 bytes (148.27 KB)
+  HFT PDF:    3101809 bytes (3029.11 KB)
+
+  Max Memory Allocated: 429.96 MB
+=== Performance Summary ===
+  Iterations:      5000
+  Concurrency:     48 workers
+  Cache:           true
+  Compliant:       true
+  Total time:      4.171 s
+  Throughput:      1198.73 ops/sec
+
+  Avg Latency:     39.422 ms
+  Min Latency:     5.569 ms
+  Max Latency:     750.421 ms
+
+=== Workload Distribution ===
+  Retail  (80%):   4000
+  Active  (15%):   750
+  HFT      (5%):   250
+
+Saved: zerodha_retail_output.pdf (112757 bytes)
+Saved: zerodha_active_output.pdf (151827 bytes)
+Saved: zerodha_hft_output.pdf (3101809 bytes)
+=== Done ===
