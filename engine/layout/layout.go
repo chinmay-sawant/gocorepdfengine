@@ -204,7 +204,10 @@ func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s %s %s Tm\n",
 		fmtFloat(cosA), fmtFloat(sinA), fmtFloat(-sinA), fmtFloat(cosA),
 		fmtFloat(pageW*watermarkXFactor), fmtFloat(pageH*watermarkYFactor))
-	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
+	// Identity-H CID fonts require 2-byte character codes (hex strings), not
+	// PDF literal strings — literals pair adjacent ASCII bytes into wrong CIDs
+	// and break PDF/UA Unicode mapping (e.g. "CO" → U+434F).
+	cb.Stream.TjCID(text)
 	fmt.Fprintf(&cb.Stream.Buf, "ET\n")
 	fmt.Fprintf(&cb.Stream.Buf, "Q\n")
 	fmt.Fprintf(&cb.Stream.Buf, "EMC\n")

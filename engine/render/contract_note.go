@@ -106,6 +106,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 	used.WriteString(note.Client.Name)
 	used.WriteString(note.Client.Code)
 	used.WriteString(note.Client.PAN)
+	used.WriteString(note.Watermark)
 	for _, t := range note.Trades {
 		used.WriteString(t.Symbol)
 		used.WriteString(t.Action)

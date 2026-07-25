@@ -139,22 +139,26 @@ func GrayProfile() []byte {
 }
 
 // SRGBProfileDict returns the PDF stream dictionary for the sRGB ICC profile.
+// Calls SRGBProfile first so /Length matches the stream bytes even when this
+// is evaluated before a separate SRGBProfile() call (struct field order).
 func SRGBProfileDict() map[string]interface{} {
+	data := SRGBProfile()
 	return map[string]interface{}{
 		"/N":         iccN,
 		"/Alternate": "/DeviceRGB",
 		"/Filter":    "/FlateDecode",
-		"/Length":    len(srgbData),
+		"/Length":    len(data),
 	}
 }
 
 // GrayProfileDict returns the PDF stream dictionary for the gray ICC profile.
 func GrayProfileDict() map[string]interface{} {
+	data := GrayProfile()
 	return map[string]interface{}{
 		"/N":         iccGrayN,
 		"/Alternate": "/DeviceGray",
 		"/Filter":    "/FlateDecode",
-		"/Length":    len(grayData),
+		"/Length":    len(data),
 	}
 }
 

@@ -392,6 +392,9 @@ func collectUsed(t *model.PDFTemplate) string {
 	if t.Footer != nil {
 		b.WriteString(t.Footer.Text)
 	}
+	if t.Config != nil && t.Config.Watermark != "" {
+		b.WriteString(t.Config.Watermark)
+	}
 	b.WriteString("Page 000 of 000")
 	return b.String()
 }

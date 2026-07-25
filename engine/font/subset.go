@@ -190,6 +190,9 @@ func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte,
 		if info.length > 0 {
 			data = glyphDataBuf[dataOffset : dataOffset+info.length]
 			copy(data, glyfTable[info.offset:info.offset+info.length])
+			if isCompositeGlyph(data) {
+				remapCompositeGIDs(data, gidMap)
+			}
 		}
 		glyphs = append(glyphs, glyphEntry{
 			gid: info.gid, data: data, length: info.length, width: info.width,
@@ -200,7 +203,126 @@ func collectGlyphInfos(gidList []uint16, glyfTable, locaTable, hmtxTable []byte,
 	return glyphs, gidMap
 }
 
+// Composite glyph flag bits (TrueType glyf table).
+const (
+	glyfArg1And2AreWords = 0x0001
+	glyfWeHaveAScale     = 0x0008
+	glyfMoreComponents   = 0x0020
+	glyfWeHaveXYScale    = 0x0040
+	glyfWeHave2By2       = 0x0080
+)
+
+func isCompositeGlyph(data []byte) bool {
+	if len(data) < 10 {
+		return false
+	}
+	return int16(binary.BigEndian.Uint16(data[0:2])) < 0
+}
+
+func compositeComponentGIDs(data []byte) []uint16 {
+	if !isCompositeGlyph(data) {
+		return nil
+	}
+	var gids []uint16
+	off := 10
+	for off+4 <= len(data) {
+		flags := binary.BigEndian.Uint16(data[off:])
+		gids = append(gids, binary.BigEndian.Uint16(data[off+2:]))
+		off += 4
+		if flags&glyfArg1And2AreWords != 0 {
+			off += 4
+		} else {
+			off += 2
+		}
+		switch {
+		case flags&glyfWeHaveAScale != 0:
+			off += 2
+		case flags&glyfWeHaveXYScale != 0:
+			off += 4
+		case flags&glyfWeHave2By2 != 0:
+			off += 8
+		}
+		if flags&glyfMoreComponents == 0 {
+			break
+		}
+	}
+	return gids
+}
+
+func remapCompositeGIDs(data []byte, gidMap map[uint16]uint16) {
+	if !isCompositeGlyph(data) {
+		return
+	}
+	off := 10
+	for off+4 <= len(data) {
+		flags := binary.BigEndian.Uint16(data[off:])
+		oldGID := binary.BigEndian.Uint16(data[off+2:])
+		if newGID, ok := gidMap[oldGID]; ok {
+			data[off+2] = byte(newGID >> shift8)
+			data[off+3] = byte(newGID)
+		} else {
+			data[off+2] = 0
+			data[off+3] = 0
+		}
+		off += 4
+		if flags&glyfArg1And2AreWords != 0 {
+			off += 4
+		} else {
+			off += 2
+		}
+		switch {
+		case flags&glyfWeHaveAScale != 0:
+			off += 2
+		case flags&glyfWeHaveXYScale != 0:
+			off += 4
+		case flags&glyfWeHave2By2 != 0:
+			off += 8
+		}
+		if flags&glyfMoreComponents == 0 {
+			break
+		}
+	}
+}
+
+// expandCompositeDependencies adds component glyphs of composites so subset
+// fonts keep referenced outlines and remapped component indices stay valid.
+func expandCompositeDependencies(orig []byte, usedGIDs map[uint16]bool) {
+	glyfTable, err := findTable(orig, "glyf")
+	if err != nil || len(glyfTable) == 0 {
+		return
+	}
+	locaTable, err := findTable(orig, "loca")
+	if err != nil || len(locaTable) == 0 {
+		return
+	}
+	headData, err := findTable(orig, "head")
+	if err != nil || len(headData) < headLocaFmtOff+ttfWordSize {
+		return
+	}
+	locaFormat := binary.BigEndian.Uint16(headData[headLocaFmtOff:])
+
+	queue := make([]uint16, 0, len(usedGIDs))
+	for gid := range usedGIDs {
+		queue = append(queue, gid)
+	}
+	for len(queue) > 0 {
+		gid := queue[0]
+		queue = queue[1:]
+		offset, length := readGlyphOffsetLength(gid, locaTable, locaFormat)
+		if length == 0 || uint32(len(glyfTable)) < offset+length {
+			continue
+		}
+		for _, comp := range compositeComponentGIDs(glyfTable[offset : offset+length]) {
+			if !usedGIDs[comp] {
+				usedGIDs[comp] = true
+				queue = append(queue, comp)
+			}
+		}
+	}
+}
+
 func buildGlyphTables(glyphs []glyphEntry, locaFormat uint16) ([]byte, []byte, []byte) {
+	// loca has numGlyphs+1 entries: start offset of each glyph plus the end of the last.
 	var newLocaData []byte
 	if locaFormat == 0 {
 		var glyphOffset uint32
@@ -208,9 +330,9 @@ func buildGlyphTables(glyphs []glyphEntry, locaFormat uint16) ([]byte, []byte, [
 			v := uint16(glyphOffset / ttfWordSize)
 			newLocaData = append(newLocaData, byte(v>>shift8), byte(v))
 			glyphOffset += pad4(ge.length)
-			v = uint16(glyphOffset / ttfWordSize)
-			newLocaData = append(newLocaData, byte(v>>shift8), byte(v))
 		}
+		v := uint16(glyphOffset / ttfWordSize)
+		newLocaData = append(newLocaData, byte(v>>shift8), byte(v))
 	} else {
 		var glyphOffset uint32
 		for _, ge := range glyphs {
@@ -218,10 +340,10 @@ func buildGlyphTables(glyphs []glyphEntry, locaFormat uint16) ([]byte, []byte, [
 				byte(glyphOffset>>shift24), byte(glyphOffset>>shift16),
 				byte(glyphOffset>>shift8), byte(glyphOffset))
 			glyphOffset += pad4(ge.length)
-			newLocaData = append(newLocaData,
-				byte(glyphOffset>>shift24), byte(glyphOffset>>shift16),
-				byte(glyphOffset>>shift8), byte(glyphOffset))
 		}
+		newLocaData = append(newLocaData,
+			byte(glyphOffset>>shift24), byte(glyphOffset>>shift16),
+			byte(glyphOffset>>shift8), byte(glyphOffset))
 	}
 
 	var newGlyfData []byte
@@ -243,8 +365,7 @@ func buildGlyphTables(glyphs []glyphEntry, locaFormat uint16) ([]byte, []byte, [
 }
 
 func buildSubsetCMap(f *Font, gidMap map[uint16]uint16) []byte {
-	usedChars := f.UsedChars()
-	subtable := buildFormat4CMap(usedChars, gidMap)
+	subtable := buildFormat4CMap(f, gidMap)
 	headerLen := uint32(cmapHeaderLen + cmapEncRecSize)
 	cmap := make([]byte, headerLen+uint32(len(subtable)))
 	cmap[0] = 0
@@ -271,10 +392,11 @@ func buildTTFHeader(numTables uint16) []byte {
 	searchRange := uint16(1<<entrySelector) * ttfEntrySize
 	rangeShift := numTables*ttfEntrySize - searchRange
 
+	// sfntVersion must be 0x00010000 (bytes 00 01 00 00) for TrueType.
 	header := make([]byte, ttfDirOffset)
 	header[0] = 0
-	header[1] = 0
-	header[2] = 1
+	header[1] = 1
+	header[2] = 0
 	header[3] = 0
 	header[ttfDWordSize] = byte(numTables >> shift8)
 	header[ttfDWordSize+1] = byte(numTables)
@@ -287,8 +409,28 @@ func buildTTFHeader(numTables uint16) []byte {
 	return header
 }
 
+func tableChecksum(data []byte) uint32 {
+	var sum uint32
+	n := len(data)
+	i := 0
+	for ; i+3 < n; i += 4 {
+		sum += binary.BigEndian.Uint32(data[i:])
+	}
+	if rem := n - i; rem > 0 {
+		var last uint32
+		for j := 0; j < rem; j++ {
+			last |= uint32(data[i+j]) << (shift8 * (3 - j))
+		}
+		sum += last
+	}
+	return sum
+}
+
 // codehound-ignore: BP-1
 func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
+	// Pull in composite components before ordering GIDs.
+	expandCompositeDependencies(orig, usedGIDs)
+
 	gidList := make([]uint16, 0, len(usedGIDs))
 	for gid := range usedGIDs {
 		gidList = append(gidList, gid)
@@ -351,6 +493,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		copy(newHeadData, headData)
 		newHeadData[headLocaFmtOff] = byte(locaFormat >> shift8)
 		newHeadData[headLocaFmtOff+1] = byte(locaFormat)
+		// checkSumAdjustment filled after the full file is assembled.
 		newHeadData[8] = 0
 		newHeadData[9] = 0
 		newHeadData[10] = 0
@@ -398,16 +541,14 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	addTable("OS/2", findTableData("OS/2"))
 	addTable("name", findTableData("name"))
 	addTable("cmap", newCMapData)
-	postData := findTableData("post")
-	if len(postData) >= ttfPostNameLen {
-		// codehound-ignore: PERF-226
-		newPostData := make([]byte, len(postData))
-		copy(newPostData, postData)
-		newPostData[ttfPostNameLen-ttfWordSize] = byte(newNumGlyphs >> shift8)
-		newPostData[ttfPostNameLen-1] = byte(newNumGlyphs)
-		postData = newPostData
+	// Format 3.0 post: metrics only, no glyph names (valid for PDF embedding).
+	postHeader := make([]byte, postMinLen)
+	postHeader[0] = 0
+	postHeader[1] = 3
+	if origPost := findTableData("post"); len(origPost) >= postMinLen {
+		copy(postHeader[4:], origPost[4:postMinLen])
 	}
-	addTable("post", postData)
+	addTable("post", postHeader)
 	addTable("loca", newLocaData)
 	addTable("glyf", newGlyfData)
 	addTable("hmtx", newHmtxData)
@@ -424,10 +565,11 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	header := buildTTFHeader(numTables)
 
 	type tableInfo struct {
-		tag    string
-		data   []byte
-		offset uint32
-		length uint32
+		tag      string
+		data     []byte
+		offset   uint32
+		length   uint32
+		checksum uint32
 	}
 
 	tableInfos := make([]tableInfo, 0, len(tables))
@@ -436,6 +578,7 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 		length := uint32(len(t.data))
 		tableInfos = append(tableInfos, tableInfo{
 			tag: t.tag, data: t.data, offset: off, length: length,
+			checksum: tableChecksum(t.data),
 		})
 		off += pad4(length)
 	}
@@ -446,6 +589,10 @@ func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16
 	dirBase := uint32(ttfDirOffset)
 	for _, ti := range tableInfos {
 		copy(out[dirBase:], ti.tag)
+		out[dirBase+4] = byte(ti.checksum >> shift24)
+		out[dirBase+5] = byte(ti.checksum >> shift16)
+		out[dirBase+6] = byte(ti.checksum >> shift8)
+		out[dirBase+7] = byte(ti.checksum)
 		out[dirBase+8] = byte(ti.offset >> shift24)
 		out[dirBase+9] = byte(ti.offset >> shift16)
 		out[dirBase+10] = byte(ti.offset >> shift8)
@@ -497,60 +644,84 @@ func findTableOffset(data []byte, tag string) uint32 {
 	return 0
 }
 
-func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
-	sorted := make([]uint16, 0, len(usedChars))
-	for _, r := range usedChars {
-		if r >= 0 && r <= 0xFFFF {
-			sorted = append(sorted, uint16(r))
-		}
-	}
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+// buildFormat4CMap builds a format-4 cmap that maps Unicode code points to
+// *new* subset glyph IDs. gidMap is oldGID → newGID.
+func buildFormat4CMap(f *Font, gidMap map[uint16]uint16) []byte {
+	usedChars := f.UsedChars()
 
-	if len(sorted) == 0 {
+	type mapping struct {
+		code uint16
+		gid  uint16
+	}
+	maps := make([]mapping, 0, len(usedChars))
+	for _, r := range usedChars {
+		if r < 0 || r > 0xFFFF {
+			continue
+		}
+		oldGID := uint16(0)
+		if g, ok := f.Glyphs[r]; ok {
+			oldGID = g.GID
+		}
+		newGID := gidMap[oldGID]
+		// Skip .notdef for non-null control; keep explicit space/etc.
+		if newGID == 0 && r != 0 {
+			// Still emit mapping to .notdef so code is present if needed.
+		}
+		maps = append(maps, mapping{code: uint16(r), gid: newGID})
+	}
+	sort.Slice(maps, func(i, j int) bool { return maps[i].code < maps[j].code })
+
+	if len(maps) == 0 {
 		return buildEmptyFormat4CMap()
 	}
 
+	// Contiguous Unicode ranges; glyph IDs are stored in glyphIDArray via
+	// non-zero idRangeOffset (idDelta alone is wrong when codes ≠ GIDs).
 	type segRange struct {
-		start uint16
-		end   uint16
+		start, end int // indices into maps
 	}
 	var ranges []segRange
-
-	prev := sorted[0]
-	rangeStart := prev
-	for i := 1; i < len(sorted); i++ {
-		curr := sorted[i]
-		if curr == prev+1 {
-			prev = curr
+	rs := 0
+	for i := 1; i < len(maps); i++ {
+		if maps[i].code == maps[i-1].code+1 {
 			continue
 		}
-		ranges = append(ranges, segRange{start: rangeStart, end: prev})
-		rangeStart = curr
-		prev = curr
+		ranges = append(ranges, segRange{start: rs, end: i - 1})
+		rs = i
 	}
-	ranges = append(ranges, segRange{start: rangeStart, end: prev})
+	ranges = append(ranges, segRange{start: rs, end: len(maps) - 1})
 
-	segCount := len(ranges) + 1
+	segCount := len(ranges) + 1 // + sentinel 0xFFFF
 
 	endCodes := make([]uint16, segCount)
 	startCodes := make([]uint16, segCount)
 	idDeltas := make([]int16, segCount)
+	idRangeOffsets := make([]uint16, segCount)
 
-	for i, r := range ranges {
-		endCodes[i] = r.end
-		startCodes[i] = r.start
-		firstNewGID := gidMap[r.start]
-		idDeltas[i] = int16(firstNewGID) - int16(r.start)
+	glyphIDArray := make([]uint16, 0, len(maps))
+	for _, m := range maps {
+		glyphIDArray = append(glyphIDArray, m.gid)
 	}
 
+	// idRangeOffset is byte offset from the offset field itself into glyphIDArray.
+	// For segment i, offset = 2 * ( (segCount-i) + indexOfFirstGlyphInArray )
+	// where indexOfFirstGlyphInArray is the running count of codes before this segment.
+	codeIndex := 0
+	for i, r := range ranges {
+		startCodes[i] = maps[r.start].code
+		endCodes[i] = maps[r.end].code
+		idDeltas[i] = 0
+		// bytes from this idRangeOffset entry to glyphIDArray[codeIndex]:
+		// remaining idRangeOffset entries after this one: (segCount-1-i)
+		// then glyphIDArray starts; skip codeIndex entries.
+		// idRangeOffset unit is bytes; each entry is 2 bytes.
+		idRangeOffsets[i] = uint16((segCount-i)+codeIndex) * ttfWordSize
+		codeIndex += r.end - r.start + 1
+	}
 	endCodes[segCount-1] = 0xFFFF
 	startCodes[segCount-1] = 0xFFFF
 	idDeltas[segCount-1] = 1
-
-	glyphIDArray := make([]uint16, 0, len(sorted))
-	for _, r := range sorted {
-		glyphIDArray = append(glyphIDArray, gidMap[r])
-	}
+	idRangeOffsets[segCount-1] = 0
 
 	headerLen := uint16(cmapF4BaseOffset)
 	endCodesLen := uint16(segCount) * ttfWordSize
@@ -605,13 +776,11 @@ func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
 		data[off+1] = byte(uint16(idDeltas[i]))
 		off += ttfWordSize
 	}
-
 	for i := 0; i < segCount; i++ {
-		data[off] = 0
-		data[off+1] = 0
+		data[off] = byte(idRangeOffsets[i] >> shift8)
+		data[off+1] = byte(idRangeOffsets[i])
 		off += ttfWordSize
 	}
-
 	for _, gid := range glyphIDArray {
 		data[off] = byte(gid >> shift8)
 		data[off+1] = byte(gid)

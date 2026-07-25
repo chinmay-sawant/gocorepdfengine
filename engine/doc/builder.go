@@ -145,9 +145,10 @@ func (d *Document) Build() []byte {
 			if dict == nil {
 				dict = make(map[string]interface{}, 1)
 			}
-			if _, ok := dict["/Length"]; !ok {
-				dict["/Length"] = len(data.Data)
-			}
+			// Always derive /Length from the actual stream bytes so a stale or
+			// zero Length key (e.g. dict built before profile data was ready)
+			// cannot fail PDF/A stream-length checks.
+			dict["/Length"] = len(data.Data)
 			enc.WriteStream(dict, data.Data)
 			enc.WriteString("\n")
 		case []byte:

@@ -152,3 +152,23 @@ func TestTableLayout_PageBreak(t *testing.T) {
 		t.Error("expected page break to produce multiple builders with small page height")
 	}
 }
+
+// PlaceWatermark must emit Identity-H CID hex strings, not PDF literal strings.
+// Literal "(CONFIDENTIAL) Tj" under Identity-H pairs ASCII bytes into wrong CIDs
+// and fails PDF/UA-2 Unicode mapping.
+func TestPlaceWatermarkUsesCIDHex(t *testing.T) {
+	cb := NewContentBuilder(595, 842)
+	cb.PlaceWatermark("CONFIDENTIAL", 595, 842)
+	out := string(cb.Bytes())
+	if strings.Contains(out, "(CONFIDENTIAL)") {
+		t.Error("watermark must not use PDF literal string encoding under Identity-H")
+	}
+	// C=0043 O=004F N=004E F=0046 I=0049 D=0044 E=0045 N=004E T=0054 I=0049 A=0041 L=004C
+	want := "<0043004F004E0046004900440045004E005400490041004C>"
+	if !strings.Contains(out, want) {
+		t.Errorf("watermark missing CID hex encoding %s\nstream:\n%s", want, out)
+	}
+	if !strings.Contains(out, "/Artifact") {
+		t.Error("watermark should be marked as Artifact")
+	}
+}
