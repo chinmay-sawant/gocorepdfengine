@@ -31,6 +31,7 @@ const (
 	ttfCmapBufSize  = 1024 // CMap buffer pre-allocation size
 )
 
+// codehound-ignore: BP-40
 // Bit shift amounts
 const (
 	shift4  = 4

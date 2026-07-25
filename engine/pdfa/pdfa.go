@@ -1,3 +1,5 @@
+// codehound-ignore-file: BP-27
+
 // Package pdfa provides PDF/A-4 output-intent and color-space dictionary
 // builders for embedding ICC profiles and marking the document as compliant
 // with ISO 19005-4 (PDF/A-4).

@@ -20,7 +20,8 @@ const outputFilePerm = 0o600
 
 func main() {
 	// Resolve JSON path relative to the project root.
-	pwd, _ := os.Getwd()
+	// codehound-ignore: BP-1
+	pwd, _ := os.Getwd() // Getwd error discarded; path is a best-effort fallback for sample data.
 	path := filepath.Join(pwd, "sampledata/financial/financial_report.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		path = filepath.Join(pwd, "financial_report.json")

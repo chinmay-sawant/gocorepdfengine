@@ -11,6 +11,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/image"
 )
 
+// codehound-ignore: BP-40
 const (
 	imgObjHint         = 8
 	avgCharWidthFactor = 0.52

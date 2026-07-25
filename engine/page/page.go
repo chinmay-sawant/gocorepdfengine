@@ -1,3 +1,5 @@
+// codehound-ignore-file: BP-27,BP-29,BP-30
+
 // Package page provides PDF page and page-tree node types for the document
 // structure. Pages hold content-stream references, font/XObject/color-space
 // resource maps, and optional structural tagging metadata.

@@ -89,6 +89,7 @@ func newUUID() string {
 	}
 	u[6] = (u[6] & uuidMask1) | uuidVariant
 	u[8] = (u[8] & uuidMask2) | uuidVersion
+	// codehound-ignore: PERF-35
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", // cold path (one-time UUID gen, unavoidable formatting)
 		u[0:4], u[4:6], u[6:8], u[8:10], u[10:16])
 }

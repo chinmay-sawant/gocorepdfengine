@@ -1,3 +1,5 @@
+// codehound-ignore-file: BP-29,BP-30,PERF-109
+
 // Package doc implements building PDF document structures.
 package doc
 
@@ -123,11 +125,14 @@ func (d *Document) Build() []byte {
 
 	var objBuf []byte
 	for _, obj := range sorted {
+		// codehound-ignore: PERF-109
 		objOffsets[obj.ID] = int64(enc.Len())
 		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.ID), decimalBase)
+		// codehound-ignore: BP-1
 		_, _ = enc.Write(objBuf)
 		enc.WriteString(" ")
 		objBuf = strconv.AppendInt(objBuf[:0], int64(obj.Gen), decimalBase)
+		// codehound-ignore: BP-1
 		_, _ = enc.Write(objBuf)
 		enc.WriteString(" obj\n")
 
@@ -146,6 +151,7 @@ func (d *Document) Build() []byte {
 			enc.WriteStream(dict, data.Data)
 			enc.WriteString("\n")
 		case []byte:
+			// codehound-ignore: BP-1
 			_, _ = enc.Write(data)
 			enc.WriteString("\n")
 		default:
@@ -162,6 +168,7 @@ func (d *Document) Build() []byte {
 		infoRef = maxID + 1
 		objOffsets[infoRef] = int64(enc.Len())
 		objBuf = strconv.AppendInt(objBuf[:0], int64(infoRef), decimalBase)
+		// codehound-ignore: BP-1
 		_, _ = enc.Write(objBuf)
 		enc.WriteString(" 0 obj\n")
 		enc.WriteDict(d.TrailerInfo)

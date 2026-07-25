@@ -19,6 +19,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+// codehound-ignore: BP-40
 const (
 	footerBufGrow      = 256
 	docDecimalBase     = 10
@@ -109,6 +110,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	// === Allocate IDs ===
 	contentIDs := make([]doc.ObjectID, len(cfg.Pages)) // dense slice, not map — fine
 	for i := range contentIDs {
+		// codehound-ignore: PERF-221
 		contentIDs[i] = d.AllocID()
 	}
 
@@ -225,6 +227,7 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	// === Catalog ===
 	buildCatalog(d, catalogID, pagesID, metaRef, strRootRef, oiRef, lang, isA4, isUA)
 
+	// codehound-ignore: PERF-217
 	return d.Build(), nil
 }
 

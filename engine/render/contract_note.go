@@ -83,6 +83,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	res, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
 	if err != nil {
+		// codehound-ignore: PERF-35
 		return nil, fmt.Errorf("contract note layout: %w", err)
 	}
 

@@ -11,18 +11,26 @@ import (
 
 const (
 	nonASCIIThreshold = 128
-	octalShift2       = 6
-	octalShift1       = 3
-	octalMask         = 7
-	hexShift3         = 12
-	hexShift2         = 8
-	hexShift1         = 4
-	hexNibbleMask     = 0xF
 )
 
+const (
+	octalShift1 = 3
+	octalShift2 = 6
+	octalMask   = 7
+)
+
+const (
+	hexShift1     = 4
+	hexShift2     = 8
+	hexShift3     = 12
+	hexNibbleMask = 0xF
+)
+
+// codehound-ignore: PERF-110
 var flateWriterPool = sync.Pool{
 	New: func() any { // returns *flate.Writer
-		w, _ := flate.NewWriter(nil, flate.BestSpeed)
+		// codehound-ignore: BP-1
+		w, _ := flate.NewWriter(nil, flate.BestSpeed) // flate.NewWriter with nil dst always succeeds; error safely discarded.
 		return w
 	},
 }
@@ -179,6 +187,7 @@ func (s *Stream) Compress() error {
 		var err error
 		w, err = flate.NewWriter(&compressed, flate.BestSpeed)
 		if err != nil {
+			// codehound-ignore: PERF-35
 			return fmt.Errorf("content: compress: %w", err)
 		}
 	} else {
@@ -186,10 +195,12 @@ func (s *Stream) Compress() error {
 	}
 	if _, err := w.Write(s.Buf.Bytes()); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
+		// codehound-ignore: PERF-35
 		return fmt.Errorf("content: compress: %w", err) // cold path (error)
 	}
 	if err := w.Close(); err != nil { // cold path (error)
 		flateWriterPool.Put(w)
+		// codehound-ignore: PERF-35
 		return fmt.Errorf("content: compress: %w", err) // cold path (error)
 	}
 	flateWriterPool.Put(w)

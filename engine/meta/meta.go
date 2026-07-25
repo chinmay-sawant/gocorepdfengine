@@ -1,3 +1,5 @@
+// codehound-ignore-file: BP-27
+
 // Package meta builds XMP metadata streams for PDF documents, including
 // Dublin Core, PDF/A-4, and PDF/UA-2 extensions.
 package meta

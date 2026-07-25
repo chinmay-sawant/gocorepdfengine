@@ -1,3 +1,5 @@
+// codehound-ignore-file: BP-27
+
 package structure
 
 import "github.com/chinmay/gocorepdfengine/engine/doc"

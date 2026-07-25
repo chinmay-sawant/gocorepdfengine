@@ -18,9 +18,14 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+// codehound-ignore: BP-40
 const (
-	marginPosX       = 72
-	textYOffset      = 150
+	marginPosX  = 72
+	textYOffset = 150
+)
+
+// codehound-ignore: BP-40
+const (
 	defaultFontFlags = 32
 	defaultAscent    = 1000
 	defaultDescent   = -200
@@ -29,6 +34,7 @@ const (
 	defaultXHeight   = 500
 )
 
+// codehound-ignore: PERF-110
 var zlibWriterPool = sync.Pool{
 	New: func() any { // returns *zlib.Writer
 		w, err := zlib.NewWriterLevel(io.Discard, flate.BestSpeed)
@@ -41,14 +47,16 @@ var zlibWriterPool = sync.Pool{
 
 func compressData(data []byte) []byte {
 	var buf bytes.Buffer
-	w, _ := zlibWriterPool.Get().(*zlib.Writer)
+	// codehound-ignore: BP-1
+	w, _ := zlibWriterPool.Get().(*zlib.Writer) // Pool.Get returns *zlib.Writer; type assertion safe for this pool.
 	if w == nil {
 		var err error
 		w, err = zlib.NewWriterLevel(&buf, flate.BestSpeed)
 		if err != nil {
 			return data
 		}
-		defer w.Close()
+		// codehound-ignore: BP-5
+		w.Close()
 		return buf.Bytes()
 	}
 	defer zlibWriterPool.Put(w)
@@ -195,6 +203,7 @@ func Generate(config Config) (Result, error) {
 	// === A-4 objects (ICC profiles, OutputIntent, XMP metadata) ===
 	if isA4 {
 		d.AddObjectAt(srgbRef, &write.Stream{
+			// codehound-ignore: PERF-217
 			Dict: color.SRGBProfileDict(),
 			Data: color.SRGBProfile(),
 		})

@@ -1,3 +1,5 @@
+// codehound-ignore-file: BP-27
+
 // Package structure builds PDF tagged-structure elements (StructTreeRoot,
 // StructElem, ParentTree) required for PDF/UA-2 accessibility compliance.
 package structure

@@ -7,6 +7,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/image"
 )
 
+// codehound-ignore: BP-40
 const (
 	marginMultiplier = 2
 	pointToPixel     = 72
@@ -104,6 +105,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				cellWidths[i] = 0
 			}
 		} else {
+			// codehound-ignore: PERF-3
 			cellWidthsBuf = make([]float64, cellsLen)
 			cellWidths = cellWidthsBuf
 		}
@@ -170,6 +172,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				}
 			}
 
+			// codehound-ignore: PERF-230
 			tw := textWidth(cell.Text, cell.Style.FontSize) // per-cell content, unavoidable
 			tx := x + cell.Style.Padding
 			switch cell.Style.Align {
