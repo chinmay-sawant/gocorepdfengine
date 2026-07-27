@@ -13,7 +13,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
 
-func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
+func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 	pageW, pageH := pageDimensions(t.Config)
 	contentW := pageW - marginL - marginR
 
@@ -82,7 +82,7 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		docTitle = t.Title.Text
 	}
 
-	return engine.GenerateDocument(engine.DocumentConfig{
+	data, err := engine.GenerateDocument(engine.DocumentConfig{
 		Width:      pageW,
 		Height:     pageH,
 		Mode:       mode,
@@ -95,6 +95,10 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		UsedText:   used,
 		FooterText: footerText,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("generating document: %w", err)
+	}
+	return data, nil
 }
 
 func pageDimensions(cfg *model.Config) (float64, float64) {

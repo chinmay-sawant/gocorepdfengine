@@ -47,7 +47,7 @@ func (m *Manager) SetDocumentRoot() {
 		return
 	}
 	elem := &StructElem{
-		Type:   S_Document,
+		Type:   SDocument,
 		Parent: 0,
 		MCID:   -1,
 	}
@@ -55,27 +55,20 @@ func (m *Manager) SetDocumentRoot() {
 	m.Root = elem
 }
 
-func (m *Manager) Build() (namespaceDict map[string]interface{},
-	rootDict map[string]interface{},
-	parentTreeDict map[string]interface{},
-	nsRef doc.ObjectID,
-	rootRef doc.ObjectID,
-	ptRef doc.ObjectID,
-	allElems []*StructElem) {
-
+func (m *Manager) Build() (map[string]interface{}, map[string]interface{}, map[string]interface{}, doc.ObjectID, doc.ObjectID, doc.ObjectID, []*StructElem) {
 	if !m.Enabled {
 		return nil, nil, nil, 0, 0, 0, nil
 	}
 
-	nsRef = m.NextObjID()
-	namespaceDict = Namespace()
+	nsRef := m.NextObjID()
+	namespaceDict := Namespace()
 
-	ptRef = m.NextObjID()
-	parentTreeDict = ParentTreeDict(m.ParentTree, m.AnnotTree)
+	ptRef := m.NextObjID()
+	parentTreeDict := ParentTreeDict(m.ParentTree, m.AnnotTree)
 
-	rootRef = m.Root.ObjectID
-	rootDict = StructTreeRootDict(rootRef, ptRef, nsRef)
+	rootRef := m.Root.ObjectID
+	rootDict := StructTreeRootDict(rootRef, ptRef, nsRef)
 
-	allElems = m.Elements
-	return
+	allElems := m.Elements
+	return namespaceDict, rootDict, parentTreeDict, nsRef, rootRef, ptRef, allElems
 }

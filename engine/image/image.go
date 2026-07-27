@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image/jpeg"
@@ -12,16 +13,16 @@ import (
 )
 
 type Image struct {
-	Width, Height      int
-	ColorSpace         string
-	BitsPerComponent   int
-	Data               []byte
-	Filter             string
+	Width, Height    int
+	ColorSpace       string
+	BitsPerComponent int
+	Data             []byte
+	Filter           string
 }
 
 var (
-	cache   map[string]*Image
-	cacheMu sync.Mutex
+	cache     map[string]*Image
+	cacheMu   sync.Mutex
 	cacheOnce sync.Once
 )
 
@@ -33,7 +34,9 @@ func initCache() {
 
 func cacheKey(data []byte) string {
 	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h[:8])
+	dst := make([]byte, hex.EncodedLen(len(h[:8])))
+	hex.Encode(dst, h[:8])
+	return string(dst)
 }
 
 func NewFromJPEG(data []byte) (*Image, error) {
@@ -168,10 +171,10 @@ func NewFromPNG(data []byte) (*Image, error) {
 		var compressed bytes.Buffer
 		zw := zlib.NewWriter(&compressed)
 		if _, err := zw.Write(rawRGB); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("image: zlib write error: %w", err)
 		}
 		if err := zw.Close(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("image: zlib close error: %w", err)
 		}
 		img = &Image{
 			Width:            w,
@@ -188,7 +191,7 @@ func NewFromPNG(data []byte) (*Image, error) {
 	return img, nil
 }
 
-func (img *Image) XObjectDict(name, colorSpaceRef string) map[string]interface{} {
+func (img *Image) XObjectDict(_, colorSpaceRef string) map[string]interface{} {
 	return map[string]interface{}{
 		"/Type":             "/XObject",
 		"/Subtype":          "/Image",

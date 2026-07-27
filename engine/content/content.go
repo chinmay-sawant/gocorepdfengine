@@ -81,19 +81,23 @@ func (s *Stream) TL(leading float64) {
 	fmt.Fprintf(&s.Buf, "%s TL\n", fmtFloat(leading))
 }
 
+//nolint:unused
 func (s *Stream) re(x, y, w, h float64) {
 	fmt.Fprintf(&s.Buf, "%s %s %s %s re\n",
 		fmtFloat(x), fmtFloat(y), fmtFloat(w), fmtFloat(h))
 }
 
+//nolint:unused
 func (s *Stream) m(x, y float64) {
 	fmt.Fprintf(&s.Buf, "%s %s m\n", fmtFloat(x), fmtFloat(y))
 }
 
+//nolint:unused
 func (s *Stream) l(x, y float64) {
 	fmt.Fprintf(&s.Buf, "%s %s l\n", fmtFloat(x), fmtFloat(y))
 }
 
+//nolint:unused
 func (s *Stream) h() {
 	s.Buf.WriteString("h\n")
 }
@@ -102,14 +106,17 @@ func (s *Stream) S() {
 	s.Buf.WriteString("S\n")
 }
 
+//nolint:unused
 func (s *Stream) f() {
 	s.Buf.WriteString("f\n")
 }
 
+//nolint:unused
 func (s *Stream) s() {
 	s.Buf.WriteString("s\n")
 }
 
+//nolint:unused
 func (s *Stream) w(width float64) {
 	fmt.Fprintf(&s.Buf, "%s w\n", fmtFloat(width))
 }
@@ -118,6 +125,7 @@ func (s *Stream) J(capStyle int) {
 	fmt.Fprintf(&s.Buf, "%d J\n", capStyle)
 }
 
+//nolint:unused
 func (s *Stream) j(joinStyle int) {
 	fmt.Fprintf(&s.Buf, "%d j\n", joinStyle)
 }
@@ -126,6 +134,7 @@ func (s *Stream) RG(r, g, b float64) {
 	fmt.Fprintf(&s.Buf, "%s %s %s RG\n", fmtFloat(r), fmtFloat(g), fmtFloat(b))
 }
 
+//nolint:unused
 func (s *Stream) rg(r, g, b float64) {
 	fmt.Fprintf(&s.Buf, "%s %s %s rg\n", fmtFloat(r), fmtFloat(g), fmtFloat(b))
 }
@@ -134,12 +143,14 @@ func (s *Stream) Do(name string) {
 	fmt.Fprintf(&s.Buf, "/%s Do\n", name)
 }
 
+//nolint:unused
 func (s *Stream) cm(a, b, c, d, e, f float64) {
 	fmt.Fprintf(&s.Buf, "%s %s %s %s %s %s cm\n",
 		fmtFloat(a), fmtFloat(b), fmtFloat(c),
 		fmtFloat(d), fmtFloat(e), fmtFloat(f))
 }
 
+//nolint:unused
 func (s *Stream) q() {
 	s.Buf.WriteString("q\n")
 }
@@ -176,13 +187,13 @@ func (s *Stream) Compress() error {
 	var compressed bytes.Buffer
 	w, err := flate.NewWriter(&compressed, flate.DefaultCompression)
 	if err != nil {
-		return err
+		return fmt.Errorf("flate.NewWriter: %w", err)
 	}
 	if _, err := w.Write(s.Buf.Bytes()); err != nil {
-		return err
+		return fmt.Errorf("flate write: %w", err)
 	}
 	if err := w.Close(); err != nil {
-		return err
+		return fmt.Errorf("flate close: %w", err)
 	}
 	s.Buf = compressed
 	s.Compressed = true

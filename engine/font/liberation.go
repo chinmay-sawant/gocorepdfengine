@@ -3,18 +3,18 @@ package font
 import "fmt"
 
 var liberationMap = map[string]string{
-	"Helvetica":            "LiberationSans-Regular",
-	"Helvetica-Bold":       "LiberationSans-Bold",
-	"Helvetica-Oblique":    "LiberationSans-Italic",
+	"Helvetica":             "LiberationSans-Regular",
+	"Helvetica-Bold":        "LiberationSans-Bold",
+	"Helvetica-Oblique":     "LiberationSans-Italic",
 	"Helvetica-BoldOblique": "LiberationSans-BoldItalic",
-	"Times-Roman":          "LiberationSerif-Regular",
-	"Times-Bold":           "LiberationSerif-Bold",
-	"Times-Italic":         "LiberationSerif-Italic",
-	"Times-BoldItalic":     "LiberationSerif-BoldItalic",
-	"Courier":              "LiberationMono-Regular",
-	"Courier-Bold":         "LiberationMono-Bold",
-	"Courier-Oblique":      "LiberationMono-Italic",
-	"Courier-BoldOblique":  "LiberationMono-BoldItalic",
+	"Times-Roman":           "LiberationSerif-Regular",
+	"Times-Bold":            "LiberationSerif-Bold",
+	"Times-Italic":          "LiberationSerif-Italic",
+	"Times-BoldItalic":      "LiberationSerif-BoldItalic",
+	"Courier":               "LiberationMono-Regular",
+	"Courier-Bold":          "LiberationMono-Bold",
+	"Courier-Oblique":       "LiberationMono-Italic",
+	"Courier-BoldOblique":   "LiberationMono-BoldItalic",
 }
 
 func LiberationFontFor(standardName string) (string, bool) {
@@ -25,18 +25,18 @@ func LiberationFontFor(standardName string) (string, bool) {
 func LiberationPaths() map[string]string {
 	base := "/usr/share/fonts/truetype/liberation"
 	return map[string]string{
-		"LiberationSans-Regular":    base + "/LiberationSans-Regular.ttf",
-		"LiberationSans-Bold":       base + "/LiberationSans-Bold.ttf",
-		"LiberationSans-Italic":     base + "/LiberationSans-Italic.ttf",
-		"LiberationSans-BoldItalic": base + "/LiberationSans-BoldItalic.ttf",
-		"LiberationSerif-Regular":   base + "/LiberationSerif-Regular.ttf",
-		"LiberationSerif-Bold":      base + "/LiberationSerif-Bold.ttf",
-		"LiberationSerif-Italic":    base + "/LiberationSerif-Italic.ttf",
+		"LiberationSans-Regular":     base + "/LiberationSans-Regular.ttf",
+		"LiberationSans-Bold":        base + "/LiberationSans-Bold.ttf",
+		"LiberationSans-Italic":      base + "/LiberationSans-Italic.ttf",
+		"LiberationSans-BoldItalic":  base + "/LiberationSans-BoldItalic.ttf",
+		"LiberationSerif-Regular":    base + "/LiberationSerif-Regular.ttf",
+		"LiberationSerif-Bold":       base + "/LiberationSerif-Bold.ttf",
+		"LiberationSerif-Italic":     base + "/LiberationSerif-Italic.ttf",
 		"LiberationSerif-BoldItalic": base + "/LiberationSerif-BoldItalic.ttf",
-		"LiberationMono-Regular":    base + "/LiberationMono-Regular.ttf",
-		"LiberationMono-Bold":       base + "/LiberationMono-Bold.ttf",
-		"LiberationMono-Italic":     base + "/LiberationMono-Italic.ttf",
-		"LiberationMono-BoldItalic": base + "/LiberationMono-BoldItalic.ttf",
+		"LiberationMono-Regular":     base + "/LiberationMono-Regular.ttf",
+		"LiberationMono-Bold":        base + "/LiberationMono-Bold.ttf",
+		"LiberationMono-Italic":      base + "/LiberationMono-Italic.ttf",
+		"LiberationMono-BoldItalic":  base + "/LiberationMono-BoldItalic.ttf",
 	}
 }
 
@@ -58,7 +58,7 @@ func (r *Registry) Get(name string) *Font {
 	return r.fonts[name]
 }
 
-func (r *Registry) RegisterStandardFont(name string, basePath string) (*Font, error) {
+func (r *Registry) RegisterStandardFont(name string, _ string) (*Font, error) {
 	liberationName, ok := LiberationFontFor(name)
 	if !ok {
 		return nil, fmt.Errorf("font: no Liberation mapping for standard font %q", name)

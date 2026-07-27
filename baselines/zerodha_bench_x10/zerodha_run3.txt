@@ -15,18 +15,18 @@ Warm-up runs...
   Active PDF: 151827 bytes (148.27 KB)
   HFT PDF:    3101809 bytes (3029.11 KB)
 
-  Max Memory Allocated: 429.96 MB
+  Max Memory Allocated: 391.15 MB
 === Performance Summary ===
   Iterations:      5000
   Concurrency:     48 workers
   Cache:           true
   Compliant:       true
-  Total time:      4.171 s
-  Throughput:      1198.73 ops/sec
+  Total time:      3.692 s
+  Throughput:      1354.39 ops/sec
 
-  Avg Latency:     39.422 ms
-  Min Latency:     5.569 ms
-  Max Latency:     750.421 ms
+  Avg Latency:     34.844 ms
+  Min Latency:     4.967 ms
+  Max Latency:     614.702 ms
 
 === Workload Distribution ===
   Retail  (80%):   4000

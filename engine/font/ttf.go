@@ -2,6 +2,7 @@ package font
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -22,8 +23,6 @@ type cmapEncodingRecord struct {
 
 type nameRecord struct {
 	platformID uint16
-	encodingID uint16
-	languageID uint16
 	nameID     uint16
 	length     uint16
 	offset     uint16
@@ -51,13 +50,13 @@ func readTag(data []byte, off uint32) ([4]byte, uint32) {
 
 func findTable(data []byte, tableTag string) ([]byte, error) {
 	if len(data) < 12 {
-		return nil, fmt.Errorf("font: data too short for offset table")
+		return nil, errors.New("font: data too short for offset table")
 	}
 	numTables := binary.BigEndian.Uint16(data[4:])
 	dirOffset := uint32(12)
 	for i := uint16(0); i < numTables; i++ {
 		if uint32(len(data)) < dirOffset+16 {
-			return nil, fmt.Errorf("font: truncated table directory")
+			return nil, errors.New("font: truncated table directory")
 		}
 		tag := string(data[dirOffset : dirOffset+4])
 		offset := binary.BigEndian.Uint32(data[dirOffset+8:])
@@ -75,14 +74,14 @@ func findTable(data []byte, tableTag string) ([]byte, error) {
 
 func tableDir(data []byte) ([]tableDirEntry, error) {
 	if len(data) < 12 {
-		return nil, fmt.Errorf("font: data too short")
+		return nil, errors.New("font: data too short")
 	}
 	numTables := binary.BigEndian.Uint16(data[4:])
 	entries := make([]tableDirEntry, numTables)
 	dirOffset := uint32(12)
 	for i := uint16(0); i < numTables; i++ {
 		if uint32(len(data)) < dirOffset+16 {
-			return nil, fmt.Errorf("font: truncated table directory")
+			return nil, errors.New("font: truncated table directory")
 		}
 		tag, _ := readTag(data, dirOffset)
 		check := binary.BigEndian.Uint32(data[dirOffset+4:])
@@ -104,7 +103,7 @@ func LoadFromPath(path string) (*Font, error) {
 
 func LoadFromBytes(data []byte) (*Font, error) {
 	if len(data) < 12 {
-		return nil, fmt.Errorf("font: data too short for TTF header")
+		return nil, errors.New("font: data too short for TTF header")
 	}
 
 	sfVersion := binary.BigEndian.Uint32(data)
@@ -156,7 +155,7 @@ func parseHead(f *Font, data []byte) error {
 		return err
 	}
 	if len(tbl) < 54 {
-		return fmt.Errorf("font: head table too short")
+		return errors.New("font: head table too short")
 	}
 	off := uint32(0)
 	off += 4 // version
@@ -165,17 +164,17 @@ func parseHead(f *Font, data []byte) error {
 	off += 4 // magicNumber
 	flags, off := readU16(tbl, off)
 	f.UnitsPerEm, off = readU16(tbl, off)
-	off += 8 // created
-	off += 8 // modified
+	off += 8                               // created
+	off += 8                               // modified
 	f.FontBBox[0], off = readI16(tbl, off) // xMin
 	f.FontBBox[1], off = readI16(tbl, off) // yMin
 	f.FontBBox[2], off = readI16(tbl, off) // xMax
 	f.FontBBox[3], off = readI16(tbl, off) // yMax
 	macStyle, off := readU16(tbl, off)
-	off += 2 // lowestRecPPEM
-	off += 2 // fontDirectionHint
-	off += 2 // indexToLocFormat
-	off += 2 // glyphDataFormat
+	off += 2                 // lowestRecPPEM
+	off += 2                 // fontDirectionHint
+	off += 2                 // indexToLocFormat
+	_, _ = readU16(tbl, off) // glyphDataFormat
 
 	f.IsSerif = flags&0x02 != 0
 	f.IsMono = macStyle&0x04 != 0
@@ -188,21 +187,21 @@ func parseHHEA(f *Font, data []byte) error {
 		return err
 	}
 	if len(tbl) < 36 {
-		return fmt.Errorf("font: hhea table too short")
+		return errors.New("font: hhea table too short")
 	}
 	off := uint32(0)
 	off += 4 // version
 	f.Ascent, off = readI16(tbl, off)
-	f.Descent, off = readI16(tbl, off)
+	f.Descent, _ = readI16(tbl, off)
 	return nil
 }
 
-func parseHMTX(f *Font, data []byte) error {
+func parseHMTX(_ *Font, data []byte) error {
 	_, err := findTable(data, "hmtx")
 	return err
 }
 
-func parseMaxp(f *Font, data []byte) error {
+func parseMaxp(_ *Font, data []byte) error {
 	_, err := findTable(data, "maxp")
 	if err != nil {
 		return err
@@ -216,7 +215,7 @@ func parseCMap(f *Font, data []byte) error {
 		return err
 	}
 	if len(tbl) < 4 {
-		return fmt.Errorf("font: cmap table too short")
+		return errors.New("font: cmap table too short")
 	}
 
 	version := binary.BigEndian.Uint16(tbl)
@@ -229,7 +228,7 @@ func parseCMap(f *Font, data []byte) error {
 	for i := uint16(0); i < numTables; i++ {
 		base := uint32(4 + i*8)
 		if uint32(len(tbl)) < base+8 {
-			return fmt.Errorf("font: cmap encoding record truncated")
+			return errors.New("font: cmap encoding record truncated")
 		}
 		records[i] = cmapEncodingRecord{
 			platformID: binary.BigEndian.Uint16(tbl[base:]),
@@ -279,7 +278,7 @@ func parseCMap(f *Font, data []byte) error {
 	}
 
 	if len(candidates) == 0 {
-		return fmt.Errorf("font: no supported cmap subtable found")
+		return errors.New("font: no supported cmap subtable found")
 	}
 	return nil
 }
@@ -352,7 +351,7 @@ func parseCMapFormat4(f *Font, data []byte) bool {
 		for c := startCodes[i]; c <= endCodes[i]; c++ {
 			var gid uint16
 			if idRangeOffsets[i] == 0 {
-				gid = uint16(int32(c) + int32(idDeltas[i])) & 0xFFFF
+				gid = uint16(int32(c)+int32(idDeltas[i])) & 0xFFFF
 			} else {
 				rangeOff := uint32(idRangeOffsets[i]) + uint32((c-startCodes[i])*2)
 				actualOff := base + 2 + uint32(segCount*6) + uint32(i*2) + rangeOff
@@ -361,7 +360,7 @@ func parseCMapFormat4(f *Font, data []byte) bool {
 				}
 				gid = binary.BigEndian.Uint16(data[actualOff:])
 				if gid != 0 {
-					gid = uint16(int32(gid) + int32(idDeltas[i])) & 0xFFFF
+					gid = uint16(int32(gid)+int32(idDeltas[i])) & 0xFFFF
 				}
 			}
 			if gid != 0 {
@@ -402,7 +401,7 @@ func parseName(f *Font, data []byte) error {
 		return fmt.Errorf("font: name table not found: %w", err)
 	}
 	if len(tbl) < 6 {
-		return fmt.Errorf("font: name table too short")
+		return errors.New("font: name table too short")
 	}
 
 	count := binary.BigEndian.Uint16(tbl[2:])
@@ -420,8 +419,6 @@ func parseName(f *Font, data []byte) error {
 		}
 		nr := nameRecord{
 			platformID: binary.BigEndian.Uint16(tbl[base:]),
-			encodingID: binary.BigEndian.Uint16(tbl[base+2:]),
-			languageID: binary.BigEndian.Uint16(tbl[base+4:]),
 			nameID:     binary.BigEndian.Uint16(tbl[base+6:]),
 			length:     binary.BigEndian.Uint16(tbl[base+8:]),
 			offset:     binary.BigEndian.Uint16(tbl[base+10:]),
@@ -465,7 +462,7 @@ func parseOS2(f *Font, data []byte) error {
 		return fmt.Errorf("font: OS/2 table not found: %w", err)
 	}
 	if len(tbl) < 86 {
-		return fmt.Errorf("font: OS/2 table too short")
+		return errors.New("font: OS/2 table too short")
 	}
 
 	version := binary.BigEndian.Uint16(tbl)
@@ -507,7 +504,7 @@ func parsePost(f *Font, data []byte) error {
 		return fmt.Errorf("font: post table not found: %w", err)
 	}
 	if len(tbl) < 32 {
-		return fmt.Errorf("font: post table too short")
+		return errors.New("font: post table too short")
 	}
 
 	off := uint32(0)

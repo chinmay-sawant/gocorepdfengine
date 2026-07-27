@@ -7,22 +7,22 @@ import (
 )
 
 type CellStyle struct {
-	FontName    string
-	FontSize    float64
-	TextColor   [3]float64
-	FillColor   *[3]float64
-	Border      *BorderStyle
-	BorderLeft  *BorderStyle
-	BorderRight *BorderStyle
-	BorderTop   *BorderStyle
+	FontName     string
+	FontSize     float64
+	TextColor    [3]float64
+	FillColor    *[3]float64
+	Border       *BorderStyle
+	BorderLeft   *BorderStyle
+	BorderRight  *BorderStyle
+	BorderTop    *BorderStyle
 	BorderBottom *BorderStyle
-	Padding     float64
-	Align       Alignment
+	Padding      float64
+	Align        Alignment
 }
 
 type CellImage struct {
-	Data        []byte // raw PNG or JPEG bytes
-	IsJPEG      bool
+	Data   []byte // raw PNG or JPEG bytes
+	IsJPEG bool
 }
 
 type Cell struct {
@@ -43,6 +43,8 @@ type TableLayout struct {
 }
 
 // LayoutResult holds the builders and the final y position after laying out rows.
+//
+//nolint:revive
 type LayoutResult struct {
 	Builders []*ContentBuilder
 	Y        float64
@@ -88,14 +90,13 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 				explicitCount++
 			}
 		}
-		if explicitCount == len(row.Cells) && explicitSum > 0 {
-			// All cells have explicit widths — scale to fill contentW.
+		switch {
+		case explicitCount == len(row.Cells) && explicitSum > 0:
 			scale := contentW / explicitSum
 			for ci := range cellWidths {
 				cellWidths[ci] *= scale
 			}
-		} else if explicitCount > 0 && explicitSum < contentW {
-			// Some cells have explicit widths — distribute remaining space equally.
+		case explicitCount > 0 && explicitSum < contentW:
 			remaining := contentW - explicitSum
 			implicitCount := len(row.Cells) - explicitCount
 			share := remaining / float64(implicitCount)
@@ -104,8 +105,7 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 					cellWidths[ci] = share
 				}
 			}
-		} else {
-			// No explicit widths — use base column widths.
+		default:
 			for ci := range cellWidths {
 				if ci < len(tl.ColWidths) {
 					cellWidths[ci] = tl.ColWidths[ci]
@@ -142,10 +142,12 @@ func (tl *TableLayout) layOutFrom(marginLeft, marginTop, pageW, pageH, y float64
 
 			tx := x + cell.Style.Padding
 			switch cell.Style.Align {
+			case AlignLeft:
 			case AlignCenter:
 				tx = x + cellW/2 - textWidth(cell.Text, cell.Style.FontSize)/2
 			case AlignRight:
 				tx = x + cellW - textWidth(cell.Text, cell.Style.FontSize) - cell.Style.Padding
+			default:
 			}
 			startY := y - row.Height + (row.Height-cell.Style.FontSize*1.2)/2
 

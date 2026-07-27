@@ -30,17 +30,17 @@ type BorderStyle struct {
 }
 
 type ContentBuilder struct {
-	Stream       *content.Stream
-	FontRes      map[string]string
-	UsedFonts    map[string]bool
-	ImageObjects map[string]*ImageObj
-	MCID         int
+	Stream        *content.Stream
+	FontRes       map[string]string
+	UsedFonts     map[string]bool
+	ImageObjects  map[string]*ImageObj
+	MCID          int
 	Width, Height float64
 }
 
 type ImageObj struct {
-	Img   *image.Image
-	Data  []byte
+	Img  *image.Image
+	Data []byte
 }
 
 func NewContentBuilder(width, height float64) *ContentBuilder {
@@ -60,7 +60,7 @@ func fmtFloat(v float64) string {
 }
 
 func textWidth(text string, fontSize float64) float64 {
-	return float64(len(text)) * fontSize * 0.52
+	return float64(len(text)) * fontSize * 0.52 //nolint:mnd
 }
 
 func WrapText(text string, fontSize, maxWidth float64) []string {
@@ -158,7 +158,7 @@ func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
 	fmt.Fprintf(&cb.Stream.Buf, "/%s 74 Tf\n", label)
 	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s %s %s Tm\n",
 		fmtFloat(cosA), fmtFloat(sinA), fmtFloat(-sinA), fmtFloat(cosA),
-		fmtFloat(pageW*0.2), fmtFloat(pageH*0.3))
+		fmtFloat(pageW*0.2), fmtFloat(pageH*0.3)) //nolint:mnd
 	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
 	fmt.Fprintf(&cb.Stream.Buf, "ET\n")
 	fmt.Fprintf(&cb.Stream.Buf, "Q\n")

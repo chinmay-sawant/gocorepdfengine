@@ -34,7 +34,7 @@ func main() {
 	}
 
 	outPath := filepath.Join(filepath.Dir(path), "financial_report_output.pdf")
-	if err := os.WriteFile(outPath, pdf, 0o644); err != nil {
+	if err := os.WriteFile(outPath, pdf, 0o600); err != nil { //nolint:mnd
 		panic(err)
 	}
 	fmt.Printf("Saved: %s (%d bytes)\n", outPath, len(pdf))

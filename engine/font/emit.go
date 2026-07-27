@@ -6,7 +6,7 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/doc"
 )
 
-func FontDict(baseFont string, cidFontRef, toUnicodeRef doc.ObjectID) map[string]interface{} {
+func ResourceDict(baseFont string, cidFontRef, toUnicodeRef doc.ObjectID) map[string]interface{} {
 	return map[string]interface{}{
 		"/Type":            "/Font",
 		"/Subtype":         "/Type0",
@@ -40,7 +40,7 @@ func CIDFontDict(font *Font, descriptorRef, cidToGIDRef doc.ObjectID) map[string
 	return d
 }
 
-func FontDescriptorDict(font *Font, fontFile2Ref doc.ObjectID) map[string]interface{} {
+func DescriptorResourceDict(font *Font, fontFile2Ref doc.ObjectID) map[string]interface{} {
 	return map[string]interface{}{
 		"/Type":        "/FontDescriptor",
 		"/FontName":    "/" + font.Name,
