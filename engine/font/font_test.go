@@ -322,7 +322,7 @@ func TestGenerateSubsetValidTTF(t *testing.T) {
 
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 CONFIDENTIAL")
 	f.AddChars(chars)
-	if err := f.GenerateSubset(); err != nil {
+	if err = f.GenerateSubset(); err != nil {
 		t.Fatalf("GenerateSubset: %v", err)
 	}
 	sub := f.SubsetData
@@ -344,9 +344,6 @@ func TestGenerateSubsetValidTTF(t *testing.T) {
 	// Every used character must map through the subset cmap to a non-zero GID
 	// (except we accept that .notdef is 0 only if the original lacked the char).
 	for _, r := range chars {
-		if r == ' ' {
-			// space may be present
-		}
 		gid, ok := subFont.cmap[r]
 		if !ok {
 			t.Errorf("subset cmap missing rune %q (U+%04X)", r, r)
