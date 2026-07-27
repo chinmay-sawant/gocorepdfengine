@@ -114,3 +114,9 @@ bench-financial:
 
 lint:
 	golangci-lint run -E revive,gocritic,gocyclo,goconst ./...
+
+# Comprehensive lint with all practical linters enabled. Keep in sync with theAdd a comment on  line R118Add diff commentMarkdown input:  edit mode selected.WritePreviewAdd a suggestionHeadingBoldItalicQuoteCodeLinkUnordered listNumbered listTask listMentionReferenceMore itemsSaved repliesAdd FilesPaste, drop, or click to add filesCancelCommentStart a review
+# .golangci.yml if one exists. Run this before pushing to catch pre-existing
+# issues that the default lint target does not cover.
+lint-all:
+	golangci-lint run -c .golangci.yml ./...
