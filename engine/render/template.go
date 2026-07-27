@@ -318,6 +318,9 @@ func collectUsed(t *model.PDFTemplate) string {
 	if t.Title != nil {
 		b.WriteString(t.Title.Text)
 	}
+	if t.Config != nil {
+		b.WriteString(t.Config.Watermark)
+	}
 	for _, td := range t.Tables {
 		for _, row := range td.Rows {
 			for _, c := range row.Row {

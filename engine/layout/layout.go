@@ -141,28 +141,34 @@ func (cb *ContentBuilder) DrawRect(r Rect, fill *[3]float64, border *BorderStyle
 }
 
 func (cb *ContentBuilder) PlaceWatermark(text string, pageW, pageH float64) {
+	if text == "" {
+		return
+	}
 	label, ok := cb.FontRes["Helvetica"]
 	if !ok {
 		label = fmt.Sprintf("F%d", len(cb.FontRes)+1)
 		cb.FontRes["Helvetica"] = label
 		cb.UsedFonts["Helvetica"] = true
 	}
-	cosA := 0.71
-	sinA := 0.71
+	// Identity-H Type0 fonts require 2-byte CIDs; use TjCID (hex string), not
+	// a PDF literal string, so each glyph maps through ToUnicode for PDF/UA-2.
+	const (
+		cosA = 0.71
+		sinA = 0.71
+		size = 74
+	)
 	fmt.Fprintf(&cb.Stream.Buf, "/Artifact <</Attached [/Top] /Type /Pagination >> BDC\n")
 	fmt.Fprintf(&cb.Stream.Buf, "q\n")
 	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s rg %s %s %s RG\n",
 		fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85),
 		fmtFloat(0.85), fmtFloat(0.85), fmtFloat(0.85))
-	fmt.Fprintf(&cb.Stream.Buf, "BT\n")
-	fmt.Fprintf(&cb.Stream.Buf, "/%s 74 Tf\n", label)
-	fmt.Fprintf(&cb.Stream.Buf, "%s %s %s %s %s %s Tm\n",
-		fmtFloat(cosA), fmtFloat(sinA), fmtFloat(-sinA), fmtFloat(cosA),
-		fmtFloat(pageW*0.2), fmtFloat(pageH*0.3)) //nolint:mnd
-	fmt.Fprintf(&cb.Stream.Buf, "(%s) Tj\n", text)
-	fmt.Fprintf(&cb.Stream.Buf, "ET\n")
-	fmt.Fprintf(&cb.Stream.Buf, "Q\n")
-	fmt.Fprintf(&cb.Stream.Buf, "EMC\n")
+	cb.Stream.BT()
+	cb.Stream.Tf(label, size)
+	cb.Stream.Tm(cosA, sinA, -sinA, cosA, pageW*0.2, pageH*0.3) //nolint:mnd
+	cb.Stream.TjCID(text)
+	cb.Stream.ET()
+	cb.Stream.Q()
+	cb.Stream.EMC()
 }
 
 func (cb *ContentBuilder) PlaceImage(img *image.Image, objName string, x, y, w, h float64) {

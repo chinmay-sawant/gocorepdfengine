@@ -12,21 +12,21 @@ Building cached models (JSON + ExpandTrades)...
   Retail trades: 2 | Active: 40 | HFT: 2000
 Warm-up runs...
   Retail PDF: 112757 bytes (110.11 KB)
-  Active PDF: 151827 bytes (148.27 KB)
+  Active PDF: 151863 bytes (148.30 KB)
   HFT PDF:    3101809 bytes (3029.11 KB)
 
-  Max Memory Allocated: 391.15 MB
+  Max Memory Allocated: 401.80 MB
 === Performance Summary ===
   Iterations:      5000
   Concurrency:     48 workers
   Cache:           true
   Compliant:       true
-  Total time:      3.692 s
-  Throughput:      1354.39 ops/sec
+  Total time:      4.397 s
+  Throughput:      1137.15 ops/sec
 
-  Avg Latency:     34.844 ms
-  Min Latency:     4.967 ms
-  Max Latency:     614.702 ms
+  Avg Latency:     41.538 ms
+  Min Latency:     5.685 ms
+  Max Latency:     734.937 ms
 
 === Workload Distribution ===
   Retail  (80%):   4000
@@ -34,6 +34,6 @@ Warm-up runs...
   HFT      (5%):   250
 
 Saved: zerodha_retail_output.pdf (112757 bytes)
-Saved: zerodha_active_output.pdf (151827 bytes)
+Saved: zerodha_active_output.pdf (151863 bytes)
 Saved: zerodha_hft_output.pdf (3101809 bytes)
 === Done ===

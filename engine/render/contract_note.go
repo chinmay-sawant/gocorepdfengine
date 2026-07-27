@@ -63,6 +63,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	var used strings.Builder
 	used.WriteString(note.Title)
+	used.WriteString(note.Watermark)
 	used.WriteString(note.Client.Name)
 	used.WriteString(note.Client.Code)
 	used.WriteString(note.Client.PAN)
