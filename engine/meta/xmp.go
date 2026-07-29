@@ -3,10 +3,18 @@ package meta
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
+	"encoding/hex"
 	"strings"
 	"text/template"
 	"time"
+)
+
+const (
+	xmpPaddingSize = 2048
+	uuidVariant    = 0x40
+	uuidVersion    = 0x80
+	uuidMask1      = 0x0f
+	uuidMask2      = 0x3f
 )
 
 type XMPConfig struct {
@@ -24,6 +32,8 @@ type XMPConfig struct {
 	InstanceID string
 }
 
+// DefaultConfig returns an XMPConfig populated with sensible defaults:
+// current timestamps, random UUIDs, and the engine name as creator/producer.
 func DefaultConfig() XMPConfig {
 	now := time.Now()
 	return XMPConfig{
@@ -35,8 +45,6 @@ func DefaultConfig() XMPConfig {
 		InstanceID: "uuid:" + newUUID(),
 	}
 }
-
-const xmpPacketPrefix = "\xef\xbb\xbf<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>"
 
 const xmpTemplateStr = "\xef\xbb\xbf<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n  <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n    <rdf:Description rdf:about=\"\"\n      xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n      xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n      xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\"\n      xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\"{{if .PDFA}}\n      xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"{{end}}{{if .PDFUA}}\n      xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\"\n      xmlns:pdfaExtension=\"http://www.aiim.org/pdfa/ns/extension/\"{{end}}>\n      <xmp:CreateDate>{{.CreateDate}}</xmp:CreateDate>\n      <xmp:ModifyDate>{{.ModifyDate}}</xmp:ModifyDate>\n      <xmp:MetadataDate>{{.MetadataDate}}</xmp:MetadataDate>\n      <xmp:CreatorTool>{{escape .Creator}}</xmp:CreatorTool>\n      <dc:format>application/pdf</dc:format>\n{{if .Title}}      <dc:title>\n        <rdf:Alt>\n          <rdf:li xml:lang=\"x-default\">{{escape .Title}}</rdf:li>\n        </rdf:Alt>\n      </dc:title>\n{{end}}{{if .Author}}      <dc:creator>\n        <rdf:Seq>\n          <rdf:li>{{escape .Author}}</rdf:li>\n        </rdf:Seq>\n      </dc:creator>\n{{end}}{{if .Subject}}      <dc:description>\n        <rdf:Alt>\n          <rdf:li xml:lang=\"x-default\">{{escape .Subject}}</rdf:li>\n        </rdf:Alt>\n      </dc:description>\n{{end}}{{if .Keywords}}      <pdf:Keywords>{{escape .Keywords}}</pdf:Keywords>\n{{end}}      <pdf:Producer>{{escape .Producer}}</pdf:Producer>\n      <xmpMM:DocumentID>{{escape .DocumentID}}</xmpMM:DocumentID>\n      <xmpMM:InstanceID>{{escape .InstanceID}}</xmpMM:InstanceID>\n{{if .PDFA}}      <pdfaid:part>4</pdfaid:part>\n      <pdfaid:rev>2020</pdfaid:rev>\n{{end}}{{if .PDFUA}}      <pdfuaid:part>2</pdfuaid:part>\n      <pdfuaid:rev>2024</pdfuaid:rev>\n      <pdfaExtension:schemas>\n        <rdf:Bag>\n          <rdf:li rdf:parseType=\"Resource\">\n            <pdfaExtension:namespaceURI>http://www.aiim.org/pdfua/ns/id/</pdfaExtension:namespaceURI>\n            <pdfaExtension:prefix>pdfuaid</pdfaExtension:prefix>\n            <pdfaExtension:property>\n              <rdf:Seq>\n                <rdf:li rdf:parseType=\"Resource\">\n                  <pdfaExtension:name>part</pdfaExtension:name>\n                  <pdfaExtension:valueType>Integer</pdfaExtension:valueType>\n                  <pdfaExtension:category>internal</pdfaExtension:category>\n                  <pdfaExtension:description>Part of PDF UA standard</pdfaExtension:description>\n                </rdf:li>\n                <rdf:li rdf:parseType=\"Resource\">\n                  <pdfaExtension:name>rev</pdfaExtension:name>\n                  <pdfaExtension:valueType>Integer</pdfaExtension:valueType>\n                  <pdfaExtension:category>internal</pdfaExtension:category>\n                  <pdfaExtension:description>Revision of PDF UA standard</pdfaExtension:description>\n                </rdf:li>\n              </rdf:Seq>\n            </pdfaExtension:property>\n          </rdf:li>\n        </rdf:Bag>\n      </pdfaExtension:schemas>\n{{end}}    </rdf:Description>\n  </rdf:RDF>\n</x:xmpmeta>\n{{.Padding}}<?xpacket end=\"w\"?>"
 
@@ -76,11 +84,23 @@ func fmtISO8601(t time.Time) string {
 
 func newUUID() string {
 	var u [16]byte
-	rand.Read(u[:])
-	u[6] = (u[6] & 0x0f) | 0x40
-	u[8] = (u[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		u[0:4], u[4:6], u[6:8], u[8:10], u[10:16])
+	if _, err := rand.Read(u[:]); err != nil {
+		return "00000000-0000-0000-0000-000000000000"
+	}
+	u[6] = (u[6] & uuidMask1) | uuidVariant
+	u[8] = (u[8] & uuidMask2) | uuidVersion
+
+	var buf [36]byte
+	hex.Encode(buf[0:8], u[0:4])
+	buf[8] = '-'
+	hex.Encode(buf[9:13], u[4:6])
+	buf[13] = '-'
+	hex.Encode(buf[14:18], u[6:8])
+	buf[18] = '-'
+	hex.Encode(buf[19:23], u[8:10])
+	buf[23] = '-'
+	hex.Encode(buf[24:36], u[10:16])
+	return string(buf[:])
 }
 
 func padding(n int) string {
@@ -91,6 +111,8 @@ func padding(n int) string {
 	return buf.String()[:n]
 }
 
+// BuildXMP renders the XMP metadata XML from the given config, including
+// the xpacket wrapper and padding.
 func BuildXMP(config XMPConfig) []byte {
 	md := config.ModifyDate
 	if md.IsZero() {
@@ -110,9 +132,11 @@ func BuildXMP(config XMPConfig) []byte {
 		PDFUA:        config.PDFUA,
 		DocumentID:   config.DocumentID,
 		InstanceID:   config.InstanceID,
-		Padding:      padding(2048),
+		Padding:      padding(xmpPaddingSize),
 	}
 	var buf bytes.Buffer
-	xmpTmpl.Execute(&buf, data)
+	if err := xmpTmpl.Execute(&buf, data); err != nil {
+		return buf.Bytes()
+	}
 	return buf.Bytes()
 }

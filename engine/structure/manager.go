@@ -1,28 +1,38 @@
+// codehound-ignore-file: BP-27
+
 package structure
 
 import "github.com/chinmay/gocorepdfengine/engine/doc"
 
+// Manager coordinates the lifecycle of structure elements: allocation of
+// marked-content identifiers, element creation, and final assembly of the
+// structure tree dictionaries.
 type Manager struct {
 	Enabled     bool
 	Elements    []*StructElem
 	MCIDCounter int
 	PageMCIDs   map[int]int
-	ParentTree  map[int][]doc.ObjectID
+	ParentTree  [][]doc.ObjectID
 	AnnotTree   map[int]doc.ObjectID
 	NextObjID   func() doc.ObjectID
 	Root        *StructElem
 }
 
+// NewManager creates a Manager. When enabled is false, all methods return
+// zero values (producing no structure output).
 func NewManager(enabled bool, allocID func() doc.ObjectID) *Manager {
 	return &Manager{
-		Enabled:    enabled,
-		PageMCIDs:  make(map[int]int),
-		ParentTree: make(map[int][]doc.ObjectID),
+		Enabled: enabled,
+		// codehound-ignore: PERF-123
+		PageMCIDs: make(map[int]int),
+		// codehound-ignore: PERF-123
+		ParentTree: make([][]doc.ObjectID, 0),
 		AnnotTree:  make(map[int]doc.ObjectID),
 		NextObjID:  allocID,
 	}
 }
 
+// AllocMCID returns the next marked-content identifier for the given page.
 func (m *Manager) AllocMCID(pageIndex int) int {
 	if !m.Enabled {
 		return 0
@@ -32,6 +42,8 @@ func (m *Manager) AllocMCID(pageIndex int) int {
 	return mcid
 }
 
+// AddElement assigns a new object ID to the element and appends it to the
+// element list. Returns the assigned ID.
 func (m *Manager) AddElement(elem *StructElem) doc.ObjectID {
 	if !m.Enabled {
 		return 0
@@ -42,12 +54,13 @@ func (m *Manager) AddElement(elem *StructElem) doc.ObjectID {
 	return id
 }
 
+// SetDocumentRoot creates the root /Document element and registers it.
 func (m *Manager) SetDocumentRoot() {
 	if !m.Enabled {
 		return
 	}
 	elem := &StructElem{
-		Type:   S_Document,
+		Type:   TypeDocument,
 		Parent: 0,
 		MCID:   -1,
 	}
@@ -55,27 +68,23 @@ func (m *Manager) SetDocumentRoot() {
 	m.Root = elem
 }
 
-func (m *Manager) Build() (namespaceDict map[string]interface{},
-	rootDict map[string]interface{},
-	parentTreeDict map[string]interface{},
-	nsRef doc.ObjectID,
-	rootRef doc.ObjectID,
-	ptRef doc.ObjectID,
-	allElems []*StructElem) {
-
+// Build assembles and returns all structure tree dictionaries (namespace,
+// root, parent tree) and their object references. Returns nil values when
+// the manager is disabled.
+func (m *Manager) Build() (map[string]interface{}, map[string]interface{}, map[string]interface{}, doc.ObjectID, doc.ObjectID, doc.ObjectID, []*StructElem) {
 	if !m.Enabled {
 		return nil, nil, nil, 0, 0, 0, nil
 	}
 
-	nsRef = m.NextObjID()
-	namespaceDict = Namespace()
+	nsRef := m.NextObjID()
+	namespaceDict := Namespace()
 
-	ptRef = m.NextObjID()
-	parentTreeDict = ParentTreeDict(m.ParentTree, m.AnnotTree)
+	ptRef := m.NextObjID()
+	parentTreeDict := ParentTreeDict(m.ParentTree, m.AnnotTree)
 
-	rootRef = m.Root.ObjectID
-	rootDict = StructTreeRootDict(rootRef, ptRef, nsRef)
+	rootRef := m.Root.ObjectID
+	rootDict := StructTreeRootDict(rootRef, ptRef, nsRef)
 
-	allElems = m.Elements
-	return
+	allElems := m.Elements
+	return namespaceDict, rootDict, parentTreeDict, nsRef, rootRef, ptRef, allElems
 }

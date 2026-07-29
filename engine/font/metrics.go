@@ -1,10 +1,15 @@
 package font
 
 import (
-	"encoding/binary"
-	"fmt"
+	"strconv"
 )
 
+func hex04(v uint16) string {
+	const hex = "0123456789ABCDEF"
+	return string([]byte{hex[v>>shift12], hex[(v>>shift8)&0xF], hex[(v>>shift4)&0xF], hex[v&0xF]})
+}
+
+// ToUnicodeCMap builds a ToUnicode CMap stream for the font.
 func (f *Font) ToUnicodeCMap() []byte {
 	keys := f.UsedRunes()
 	if len(keys) == 0 {
@@ -31,7 +36,7 @@ func (f *Font) ToUnicodeCMap() []byte {
 	}
 	ranges = append(ranges, bfRange{startCID: uint16(rs), endCID: uint16(prev)})
 
-	cmap := make([]byte, 0, 1024)
+	cmap := make([]byte, 0, ttfCmapBufSize)
 
 	appendStr := func(s string) {
 		cmap = append(cmap, []byte(s)...)
@@ -47,13 +52,10 @@ func (f *Font) ToUnicodeCMap() []byte {
 	appendStr("<0000> <FFFF>\n")
 	appendStr("endcodespacerange\n")
 
-	appendStr(fmt.Sprintf("%d beginbfrange\n", len(ranges)))
+	appendStr(strconv.Itoa(len(ranges)) + " beginbfrange\n")
 
 	for _, r := range ranges {
-		startHex := fmt.Sprintf("%04X", r.startCID)
-		endHex := fmt.Sprintf("%04X", r.endCID)
-		uniStr := fmt.Sprintf("%04X", r.startCID)
-		appendStr(fmt.Sprintf("<%s> <%s> <%s>\n", startHex, endHex, uniStr))
+		appendStr("<" + hex04(r.startCID) + "> <" + hex04(r.endCID) + "> <" + hex04(r.startCID) + ">\n")
 	}
 
 	appendStr("endbfrange\n")
@@ -65,19 +67,29 @@ func (f *Font) ToUnicodeCMap() []byte {
 	return cmap
 }
 
+// BuildCIDToGIDMap builds a CIDToGIDMap stream for the font.
 func (f *Font) BuildCIDToGIDMap() []byte {
-	data := make([]byte, 65536*2)
+	const (
+		cidMax    = 65536
+		cidMapLen = cidMax * 2
+	)
+	data := make([]byte, cidMapLen)
 	for r := range f.Glyphs {
 		cid := uint32(r)
-		if cid >= 65536 {
+		if cid >= cidMax {
 			continue
 		}
 		if f.SubGIDMap != nil {
 			if newGID, ok := f.SubGIDMap[f.cmap[r]]; ok {
-				binary.BigEndian.PutUint16(data[cid*2:], newGID)
+				i := cid * ttfWordSize
+				data[i] = byte(newGID >> shift8)
+				data[i+1] = byte(newGID)
 			}
 		} else {
-			binary.BigEndian.PutUint16(data[cid*2:], f.cmap[r])
+			i := cid * ttfWordSize
+			v := f.cmap[r]
+			data[i] = byte(v >> shift8)
+			data[i+1] = byte(v)
 		}
 	}
 	return data

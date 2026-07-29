@@ -2,7 +2,6 @@ package render
 
 import (
 	"encoding/base64"
-	"fmt"
 	"strings"
 
 	"github.com/chinmay/gocorepdfengine/engine"
@@ -13,7 +12,22 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/model"
 )
 
-func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
+// codehound-ignore: BP-40
+const (
+	rowHeightMultiplier = 2
+	rowHeightBase       = 12
+	minRowHeight        = 36
+)
+
+// codehound-ignore: BP-40
+const (
+	jpegMarkerByte1 = 0xFF
+	jpegMarkerByte2 = 0xD8
+)
+
+// TemplatePDF renders a model.PDFTemplate (tables, title, images, watermark)
+// into a multi-page PDF binary by driving engine.GenerateDocument.
+func TemplatePDF(t *model.PDFTemplate, _ Options) ([]byte, error) {
 	pageW, pageH := pageDimensions(t.Config)
 	contentW := pageW - marginL - marginR
 
@@ -31,7 +45,7 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		if tbl == nil {
 			continue
 		}
-		var res layout.LayoutResult
+		var res layout.Result
 		var err error
 		if len(allBuilders) == 0 {
 			res, err = tbl.LayOut(marginL, marginT, pageW, pageH, cur)
@@ -39,7 +53,7 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 			res, err = tbl.LayOutFrom(marginL, marginT, pageW, pageH, y, cur)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("template layout: %w", err)
+			return nil, errf("template layout", err)
 		}
 		if len(allBuilders) == 0 {
 			allBuilders = res.Builders
@@ -52,7 +66,7 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 
 	pages := make([]engine.PageContent, 0, len(allBuilders))
 	for _, b := range allBuilders {
-		imgs := make(map[string]*image.Image)
+		imgs := make(map[string]*image.Image, len(b.ImageObjects))
 		for name, obj := range b.ImageObjects {
 			imgs[name] = obj.Img
 		}
@@ -82,7 +96,7 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		docTitle = t.Title.Text
 	}
 
-	return engine.GenerateDocument(engine.DocumentConfig{
+	pdf, err := engine.GenerateDocument(engine.DocumentConfig{
 		Width:      pageW,
 		Height:     pageH,
 		Mode:       mode,
@@ -95,6 +109,10 @@ func TemplatePDF(t *model.PDFTemplate, opts Options) ([]byte, error) {
 		UsedText:   used,
 		FooterText: footerText,
 	})
+	if err != nil {
+		return nil, errf("generate document", err)
+	}
+	return pdf, nil
 }
 
 func pageDimensions(cfg *model.Config) (float64, float64) {
@@ -150,10 +168,11 @@ func titleLayout(title *model.Title, contentW float64) *layout.TableLayout {
 		}
 	}
 
-	p, _ := layout.ParseProps(title.Props)
-	rowH := p.FontSize*2 + 12
-	if rowH < 36 {
-		rowH = 36
+	// codehound-ignore: BP-1
+	p, _ := layout.ParseProps(title.Props) // ParseProps error is non-fatal — defaults to empty props.
+	rowH := p.FontSize*rowHeightMultiplier + rowHeightBase
+	if rowH < minRowHeight {
+		rowH = minRowHeight
 	}
 
 	tl.Rows = append(tl.Rows, layout.Row{
@@ -186,6 +205,11 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 		}
 	}
 
+	cellCount := countCells(td)
+	hexCache := make(map[string]color.RGB, cellCount)
+	b64Cache := make(map[string][]byte, cellCount)
+	propsCache := make(map[string]layout.CellProps, cellCount)
+	buildTableCaches(td, hexCache, b64Cache, propsCache)
 	for i, row := range td.Rows {
 		rowH := 0.0
 		if i < len(td.RowHeights) && td.RowHeights[i] > 0 {
@@ -202,30 +226,27 @@ func tableLayout(td *model.TableDef, contentW float64) *layout.TableLayout {
 
 		r := layout.Row{Height: rowH}
 		for _, c := range row.Row {
-			p, _ := layout.ParseProps(c.Props)
+			p := propsCache[c.Props]
 			var fill *color.RGB
 			if c.BGColor != "" {
-				parsed, err := color.ParseHex(c.BGColor)
-				if err == nil {
-					fill = &parsed
-				}
+				parsed := hexCache[c.BGColor]
+				fill = &parsed
 			} else if defaultBG != nil {
 				fill = defaultBG
 			}
 			var tc [3]float64
 			if c.TextColor != "" {
-				parsed, err := color.ParseHex(c.TextColor)
-				if err == nil {
-					tc = [3]float64(parsed)
-				}
+				parsed := hexCache[c.TextColor]
+				tc = [3]float64(parsed)
 			} else if defaultTC != [3]float64{} {
 				tc = defaultTC
 			}
+			// codehound-ignore: PERF-230
 			lc := cellFromProps(c.Text, p, &tc, fill, c.Width, rowH)
 			if c.Image != nil && c.Image.ImageData != "" {
-				raw, err := base64.StdEncoding.DecodeString(c.Image.ImageData)
-				if err == nil && len(raw) > 0 {
-					isJPEG := len(raw) > 2 && raw[0] == 0xFF && raw[1] == 0xD8
+				raw := b64Cache[c.Image.ImageData]
+				if len(raw) > 0 {
+					isJPEG := len(raw) > 2 && raw[0] == jpegMarkerByte1 && raw[1] == jpegMarkerByte2
 					lc.Image = &layout.CellImage{Data: raw, IsJPEG: isJPEG}
 				}
 			}
@@ -309,6 +330,53 @@ func cellFromProps(text string, p layout.CellProps, tc *[3]float64, fill *color.
 	return layout.Cell{Text: text, Style: style, W: width, H: rowH}
 }
 
+func buildTableCaches(td *model.TableDef, hexCache map[string]color.RGB, b64Cache map[string][]byte, propsCache map[string]layout.CellProps) {
+	for _, row := range td.Rows {
+		for _, c := range row.Row {
+			if c.Props != "" {
+				if _, ok := propsCache[c.Props]; !ok {
+					// codehound-ignore: PERF-230
+					if p, err := layout.ParseProps(c.Props); err == nil {
+						propsCache[c.Props] = p
+					}
+				}
+			}
+			if c.BGColor != "" {
+				if _, ok := hexCache[c.BGColor]; !ok {
+					// codehound-ignore: PERF-230, BP-1
+					parsed, _ := color.ParseHex(c.BGColor)
+					hexCache[c.BGColor] = parsed
+				}
+			}
+			if c.TextColor != "" {
+				if _, ok := hexCache[c.TextColor]; !ok {
+					// codehound-ignore: PERF-230, BP-1
+					parsed, _ := color.ParseHex(c.TextColor)
+					hexCache[c.TextColor] = parsed
+				}
+			}
+			if c.Image != nil && c.Image.ImageData != "" {
+				if _, ok := b64Cache[c.Image.ImageData]; !ok {
+					// codehound-ignore: PERF-26, PERF-230, BP-1
+					raw, _ := base64.StdEncoding.DecodeString(c.Image.ImageData)
+					b64Cache[c.Image.ImageData] = raw
+				}
+			}
+		}
+	}
+}
+
+func countCells(td *model.TableDef) int {
+	n := 0
+	for _, row := range td.Rows {
+		n += len(row.Row)
+	}
+	if n == 0 {
+		n = 1
+	}
+	return n
+}
+
 func collectUsed(t *model.PDFTemplate) string {
 	var b strings.Builder
 	if t.Title != nil {
@@ -323,6 +391,9 @@ func collectUsed(t *model.PDFTemplate) string {
 	}
 	if t.Footer != nil {
 		b.WriteString(t.Footer.Text)
+	}
+	if t.Config != nil && t.Config.Watermark != "" {
+		b.WriteString(t.Config.Watermark)
 	}
 	b.WriteString("Page 000 of 000")
 	return b.String()

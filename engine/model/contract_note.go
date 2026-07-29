@@ -4,10 +4,21 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math/rand"
 	"os"
 	"strconv"
+)
+
+// codehound-ignore: BP-40
+const (
+	buySellChoice  = 2
+	maxQtyAddend   = 50
+	lotSize        = 10
+	minBasePrice   = 100.0
+	maxPriceRange  = 3400.0
+	pricePrecision = 100
+	timeUnit       = 60
 )
 
 // ContractNote is the domain model for Zerodha-style contract notes.
@@ -81,9 +92,9 @@ type Financials struct {
 }
 
 type Summary struct {
-	TotalTurnover      float64 `json:"total_turnover"`
-	Brokerage          float64 `json:"brokerage"`
-	RegulatoryCharges  float64 `json:"regulatory_charges"`
+	TotalTurnover     float64 `json:"total_turnover"`
+	Brokerage         float64 `json:"brokerage"`
+	RegulatoryCharges float64 `json:"regulatory_charges"`
 }
 
 type Audit struct {
@@ -95,11 +106,11 @@ type Audit struct {
 func LoadJSON(path string) (*ContractNote, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, errf("read "+path, err)
 	}
 	var note ContractNote
 	if err := json.Unmarshal(data, &note); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, errf("parse "+path, err)
 	}
 	note.applyDefaults()
 	return &note, nil
@@ -162,28 +173,40 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 	if n.ModeLabel == "retail" && len(n.Trades) > 0 && count <= len(n.Trades) {
 		return
 	}
+	// codehound-ignore: CWE-335
+	// #nosec G404 -- Deterministic seed used for benchmark reproducibility, not security-sensitive.
 	rng := rand.New(rand.NewSource(seed))
 	trades := make([]Trade, count)
-	hour, min, sec := 9, 15, 0
+	hour, mn, sec := 9, 15, 0
+	symCount := len(symbols)
 	for i := 0; i < count; i++ {
-		sym := symbols[rng.Intn(len(symbols))]
+		sym := symbols[rng.Intn(symCount)]
 		action := "BUY"
-		if rng.Intn(2) == 1 {
+		if rng.Intn(buySellChoice) == 1 {
 			action = "SELL"
 		}
-		qty := (rng.Intn(50) + 1) * 10
-		price := 100.0 + rng.Float64()*3400.0
-		price = float64(int(price*100)) / 100
+		qty := (rng.Intn(maxQtyAddend) + 1) * lotSize
+		price := minBasePrice + rng.Float64()*maxPriceRange
+		price = float64(int(price*pricePrecision)) / pricePrecision
 		total := float64(qty) * price
 
-		timeStr := fmt.Sprintf("%02d:%02d:%02d", hour, min, sec)
+		var timeBuf [8]byte
+		timeBuf[0] = byte('0' + hour/10)
+		timeBuf[1] = byte('0' + hour%10)
+		timeBuf[2] = ':'
+		timeBuf[3] = byte('0' + mn/10)
+		timeBuf[4] = byte('0' + mn%10)
+		timeBuf[5] = ':'
+		timeBuf[6] = byte('0' + sec/10)
+		timeBuf[7] = byte('0' + sec%10)
+		timeStr := string(timeBuf[:])
 		sec++
-		if sec >= 60 {
+		if sec >= timeUnit {
 			sec = 0
-			min++
+			mn++
 		}
-		if min >= 60 {
-			min = 0
+		if mn >= timeUnit {
+			mn = 0
 			hour++
 		}
 
@@ -220,4 +243,8 @@ func (n *ContractNote) ExpandTrades(count int, seed int64) {
 // Money formats a rupee amount for display (ASCII "Rs." for portable fonts).
 func Money(v float64) string {
 	return "Rs." + strconv.FormatFloat(v, 'f', 2, 64)
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
 }

@@ -29,6 +29,8 @@ type Config struct {
 	EmbedFonts          bool   `json:"embedFonts"`
 }
 
+// PageSize returns the page width and height for the configured page size name
+// (A4, A3, etc.), defaulting to A4 when unset or unknown.
 func (c *Config) PageSize() (float64, float64) {
 	if c.Page == "" {
 		c.Page = "A4"
@@ -41,12 +43,12 @@ func (c *Config) PageSize() (float64, float64) {
 }
 
 type Title struct {
-	Props     string           `json:"props"`
-	Text      string           `json:"text"`
-	Table     *TableDef        `json:"table,omitempty"`
-	BGColor   string           `json:"bgcolor,omitempty"`
-	TextColor string           `json:"textcolor,omitempty"`
-	Link      string           `json:"link,omitempty"`
+	Props     string    `json:"props"`
+	Text      string    `json:"text"`
+	Table     *TableDef `json:"table,omitempty"`
+	BGColor   string    `json:"bgcolor,omitempty"`
+	TextColor string    `json:"textcolor,omitempty"`
+	Link      string    `json:"link,omitempty"`
 }
 
 type TableDef struct {
@@ -63,20 +65,20 @@ type TableRow struct {
 }
 
 type TableCell struct {
-	Props     string `json:"props"`
-	Text      string `json:"text,omitempty"`
-	BGColor   string `json:"bgcolor,omitempty"`
-	TextColor string `json:"textcolor,omitempty"`
+	Props     string  `json:"props"`
+	Text      string  `json:"text,omitempty"`
+	BGColor   string  `json:"bgcolor,omitempty"`
+	TextColor string  `json:"textcolor,omitempty"`
 	Width     float64 `json:"width,omitempty"`
 	Height    float64 `json:"height,omitempty"`
-	Link      string `json:"link,omitempty"`
-	Dest      string `json:"dest,omitempty"`
-	Image     *Image `json:"image,omitempty"`
+	Link      string  `json:"link,omitempty"`
+	Dest      string  `json:"dest,omitempty"`
+	Image     *Image  `json:"image,omitempty"`
 }
 
 type Image struct {
-	ImageName string `json:"imagename,omitempty"`
-	ImageData string `json:"imagedata"`
+	ImageName string  `json:"imagename,omitempty"`
+	ImageData string  `json:"imagedata"`
 	Width     float64 `json:"width"`
 	Height    float64 `json:"height"`
 }
@@ -99,6 +101,7 @@ type PDFTemplate struct {
 	Footer   *Footer    `json:"footer,omitempty"`
 }
 
+// LoadTemplate reads a JSON file at path and unmarshals it into a PDFTemplate.
 func LoadTemplate(path string) (*PDFTemplate, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

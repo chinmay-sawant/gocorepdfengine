@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Go code style review — gocorepdfengine (2026-07-29)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-4 border-b border-stone-200 pb-8">
+        <p class="text-xs uppercase tracking-wider text-stone-500">
+          Go code style review · 2026-07-29 · golang-code-style skill · follow-up
+        </p>
+        <h1 class="font-serif text-4xl tracking-tight">gocorepdfengine</h1>
+        <p class="text-stone-600 max-w-2xl">
+          Four style axes scored against
+          <span class="font-medium">samber/cc-skills-golang@golang-code-style</span> v1.2.2.
+          Prior overall <strong>6.2</strong> (2026-07-25) → now <strong>6.7</strong> (+0.5).
+          Compliant Zerodha throughput (~2×, ~2.3–2.5k ops/sec) is product excellence —
+          scored on the architecture review, not these style axes.
+        </p>
+        <div class="flex flex-wrap gap-3 items-center">
+          <div class="rounded-full bg-slate-900 text-white px-4 py-1.5 text-sm font-medium">
+            Overall <span class="text-emerald-300">6.7</span> / 10
+          </div>
+          <div class="rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-medium">
+            Δ +0.5 vs 2026-07-25
+          </div>
+          <div class="text-xs text-stone-500">
+            Readable with concentrated debt · equal-weight axis average
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-2">
+          <div class="rounded-lg bg-white border border-stone-200 p-3">
+            <div class="text-stone-500">Control flow</div>
+            <div class="text-2xl font-semibold">7.2</div>
+            <div class="text-emerald-600 text-[10px]">+0.7</div>
+          </div>
+          <div class="rounded-lg bg-white border border-stone-200 p-3">
+            <div class="text-stone-500">Functions &amp; vars</div>
+            <div class="text-2xl font-semibold">6.0</div>
+            <div class="text-emerald-600 text-[10px]">+0.5</div>
+          </div>
+          <div class="rounded-lg bg-white border border-stone-200 p-3">
+            <div class="text-stone-500">Line length &amp; org</div>
+            <div class="text-2xl font-semibold">5.9</div>
+            <div class="text-emerald-600 text-[10px]">+0.4</div>
+          </div>
+          <div class="rounded-lg bg-white border border-stone-200 p-3">
+            <div class="text-stone-500">Values &amp; philosophy</div>
+            <div class="text-2xl font-semibold">7.6</div>
+            <div class="text-emerald-600 text-[10px]">+0.2</div>
+          </div>
+        </div>
+        <p class="text-sm text-stone-500">
+          Full write-up:
+          <a class="text-xs bg-stone-100 px-1 rounded underline" href="./2026-07-29-golang-code-style-review.md"
+            >2026-07-29-golang-code-style-review.md</a
+          >
+          · prior:
+          <a class="text-xs bg-stone-100 px-1 rounded underline" href="./2026-07-25-golang-code-style-review.md"
+            >2026-07-25</a
+          >
+        </p>
+      </header>
+
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl">Executive summary</h2>
+        <div class="rounded-xl border border-stone-200 bg-white p-6 space-y-3 text-sm text-stone-700 leading-relaxed">
+          <p>
+            Biggest win: <strong class="text-slate-900">decomposing dual PDF assemblers</strong>.
+            <code class="text-xs bg-stone-100 px-1 rounded">GenerateDocument</code> is ~169 lines (was ~355)
+            with five focused helpers. Catalog paths use
+            <code class="text-xs bg-stone-100 px-1 rounded">write.Ref</code> (zero remaining
+            <code class="text-xs bg-stone-100 px-1 rounded">fmt.Sprintf("%d 0 R")</code>).
+          </p>
+          <p>
+            Still anchoring below ~7.5:
+            <code class="text-xs bg-stone-100 px-1 rounded">StyledCell</code> (7 params, <strong>74</strong> one-line call sites),
+            5–7 param layout APIs, and helpers that traded body length for 8–11-param signatures.
+          </p>
+          <p class="text-stone-500 text-xs">
+            Score formula: (7.2 + 6.0 + 5.9 + 7.6) / 4 = 6.675 → <strong>6.7</strong>
+          </p>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">Scorecard</h2>
+        <div class="rounded-xl border border-stone-200 bg-white p-6 space-y-4">
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span>Control flow</span><span class="font-semibold">7.2</span></div>
+            <div class="h-2 bg-stone-100 rounded-full overflow-hidden"><div class="h-full bg-sky-600 rounded-full" style="width:72%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span>Function design &amp; variables</span><span class="font-semibold">6.0</span></div>
+            <div class="h-2 bg-stone-100 rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width:60%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span>Line length, breaking &amp; org</span><span class="font-semibold">5.9</span></div>
+            <div class="h-2 bg-stone-100 rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width:59%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span>Values, strings, types &amp; philosophy</span><span class="font-semibold">7.6</span></div>
+            <div class="h-2 bg-stone-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-600 rounded-full" style="width:76%"></div></div>
+          </div>
+          <div class="pt-2 border-t border-stone-100">
+            <div class="flex justify-between text-sm mb-1"><span class="font-medium">Overall</span><span class="font-semibold">6.7 / 10</span></div>
+            <div class="h-3 bg-stone-100 rounded-full overflow-hidden"><div class="h-full bg-slate-900 rounded-full" style="width:67%"></div></div>
+          </div>
+          <p class="text-xs text-stone-500 pt-2">
+            Band guide: 8–10 excellent · 6–7 readable with debt · 4–5 fragile · ≤3 hostile
+          </p>
+        </div>
+      </section>
+
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl">Finding volume</h2>
+        <div class="grid sm:grid-cols-4 gap-3 text-center text-sm">
+          <div class="rounded-lg bg-white border border-stone-200 p-4">
+            <div class="text-3xl font-semibold text-red-700">4</div>
+            <div class="text-xs text-stone-500 mt-1">High <span class="text-emerald-600">(was 8)</span></div>
+          </div>
+          <div class="rounded-lg bg-white border border-stone-200 p-4">
+            <div class="text-3xl font-semibold text-amber-700">30</div>
+            <div class="text-xs text-stone-500 mt-1">Medium <span class="text-emerald-600">(was 35)</span></div>
+          </div>
+          <div class="rounded-lg bg-white border border-stone-200 p-4">
+            <div class="text-3xl font-semibold text-slate-600">6</div>
+            <div class="text-xs text-stone-500 mt-1">Low <span class="text-emerald-600">(was 17)</span></div>
+          </div>
+          <div class="rounded-lg bg-white border border-stone-200 p-4">
+            <div class="text-3xl font-semibold">40</div>
+            <div class="text-xs text-stone-500 mt-1">Raw total* <span class="text-emerald-600">(was 60)</span></div>
+          </div>
+        </div>
+        <p class="text-xs text-stone-500">*Across four dimensions; some issues appear in more than one dimension.</p>
+      </section>
+
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl">Key deltas</h2>
+        <div class="rounded-xl border border-stone-200 bg-white overflow-hidden text-sm">
+          <table class="w-full">
+            <thead class="bg-stone-100 text-left text-xs uppercase tracking-wider text-stone-500">
+              <tr>
+                <th class="px-4 py-3">Prior issue</th>
+                <th class="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100 text-stone-700">
+              <tr>
+                <td class="px-4 py-3">GenerateDocument ~355-line body</td>
+                <td class="px-4 py-3 text-emerald-700 font-medium">Mostly fixed (~169 lines)</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">Dual assembler nesting (high)</td>
+                <td class="px-4 py-3 text-emerald-700 font-medium">Mostly fixed (helpers + early returns)</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">fmt.Sprintf("%d 0 R") ~30</td>
+                <td class="px-4 py-3 text-emerald-700 font-medium">Resolved (0 matches)</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">StyledCell 7-arg one-liners</td>
+                <td class="px-4 py-3 text-amber-800">Unchanged (74 call sites)</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">map[string]interface{} ~77</td>
+                <td class="px-4 py-3 text-amber-800">Unchanged (~76)</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">New 8–11 param helpers</td>
+                <td class="px-4 py-3 text-amber-800">Debt shifted (body → params)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">Priority cleanup</h2>
+        <ol class="space-y-3">
+          <li class="rounded-xl border border-stone-200 bg-white p-5 flex gap-4">
+            <span class="flex-none w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-medium">1</span>
+            <div>
+              <h3 class="font-medium">Redesign <code class="text-xs bg-stone-100 px-1 rounded">StyledCell</code> / theme API</h3>
+              <p class="text-sm text-stone-600 mt-1">Options struct or Cell + CellStyle. Fixes 74 one-line 7-arg call sites.</p>
+            </div>
+          </li>
+          <li class="rounded-xl border border-stone-200 bg-white p-5 flex gap-4">
+            <span class="flex-none w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-medium">2</span>
+            <div>
+              <h3 class="font-medium"><code class="text-xs bg-stone-100 px-1 rounded">LayOut</code> options struct</h3>
+              <p class="text-sm text-stone-600 mt-1">Collapse 5–7 float params into <code class="text-xs bg-stone-100 px-1 rounded">LayOutParams</code>.</p>
+            </div>
+          </li>
+          <li class="rounded-xl border border-stone-200 bg-white p-5 flex gap-4">
+            <span class="flex-none w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-medium">3</span>
+            <div>
+              <h3 class="font-medium">Bundle assembler helper IDs</h3>
+              <p class="text-sm text-stone-600 mt-1">Target ≤4 params on <code class="text-xs bg-stone-100 px-1 rounded">addFontObjects</code> / <code class="text-xs bg-stone-100 px-1 rounded">buildStructureTree</code> / <code class="text-xs bg-stone-100 px-1 rounded">buildCatalog</code>.</p>
+            </div>
+          </li>
+          <li class="rounded-xl border border-stone-200 bg-white p-5 flex gap-4">
+            <span class="flex-none w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center text-sm font-medium">4</span>
+            <div>
+              <h3 class="font-medium">Share font emission</h3>
+              <p class="text-sm text-stone-600 mt-1">One implementation for <code class="text-xs bg-stone-100 px-1 rounded">addFontObjects</code> ≈ <code class="text-xs bg-stone-100 px-1 rounded">setupDocumentFont</code>.</p>
+            </div>
+          </li>
+          <li class="rounded-xl border border-stone-200 bg-white p-5 flex gap-4">
+            <span class="flex-none w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center text-sm font-medium">5</span>
+            <div>
+              <h3 class="font-medium">Finish <code class="text-xs bg-stone-100 px-1 rounded">buildSubsetTTF</code> split</h3>
+              <p class="text-sm text-stone-600 mt-1">Table mutate · directory write · checksum. ~195 lines today.</p>
+            </div>
+          </li>
+          <li class="rounded-xl border border-stone-200 bg-white p-5 flex gap-4">
+            <span class="flex-none w-8 h-8 rounded-full bg-slate-600 text-white flex items-center justify-center text-sm font-medium">6</span>
+            <div>
+              <h3 class="font-medium">Typed PDF values + uniform refs</h3>
+              <p class="text-sm text-stone-600 mt-1"><code class="text-xs bg-stone-100 px-1 rounded">write.Ref</code> everywhere; <code class="text-xs bg-stone-100 px-1 rounded">write.PDFString</code> for Lang/Title/Alt. ~26 remaining " 0 R" concats.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="font-serif text-2xl">Dimension highlights</h2>
+
+        <article class="rounded-xl border border-stone-200 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="font-serif text-xl">1. Control flow</h3>
+            <span class="rounded-full bg-sky-100 text-sky-900 text-sm font-medium px-3 py-1">7.2 / 10</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Top remaining</p>
+              <ul class="space-y-2 text-stone-700">
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> Nested image success in layOutFrom</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> Multi-operand conditions without named booleans</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">low</span> C-style count loops vs range n</li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Done well</p>
+              <ul class="list-disc list-inside space-y-1 text-stone-700">
+                <li>Assembler happy paths flattened (no high findings)</li>
+                <li>Early returns on disabled modes</li>
+                <li>Switch / range-first habits</li>
+              </ul>
+              <p class="text-xs text-stone-500 mt-3">11 findings · 0 high · 9 medium · 2 low</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-xl border border-stone-200 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="font-serif text-xl">2. Functions &amp; variables</h3>
+            <span class="rounded-full bg-amber-100 text-amber-900 text-sm font-medium px-3 py-1">6.0 / 10</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Top issues</p>
+              <ul class="space-y-2 text-stone-700">
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-800 px-1.5 py-0.5 rounded">high</span> addFontObjects (10), buildStructureTree (~11), runWarmup (12) params</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-800 px-1.5 py-0.5 rounded">high</span> buildSubsetTTF still ~195 lines</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> StyledCell / LayOut* 5–7 params</li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Done well</p>
+              <ul class="list-disc list-inside space-y-1 text-stone-700">
+                <li>GenerateDocument ~169 lines (was ~355)</li>
+                <li>Config / DocumentConfig / Options at public APIs</li>
+                <li>TTF parse still well-split</li>
+              </ul>
+              <p class="text-xs text-stone-500 mt-3">13 findings · 3 high · 8 medium · 2 low</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-xl border border-stone-200 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="font-serif text-xl">3. Line length &amp; organization</h3>
+            <span class="rounded-full bg-amber-100 text-amber-900 text-sm font-medium px-3 py-1">5.9 / 10</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Top issues</p>
+              <ul class="space-y-2 text-stone-700">
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-800 px-1.5 py-0.5 rounded">high</span> 74 one-line StyledCell(7 args) calls</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> Mega XMP + ToUnicode literals</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> Dead exports: Point, structure.Manager</li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Done well</p>
+              <ul class="list-disc list-inside space-y-1 text-stone-700">
+                <li>Clear package map; better assembler file decomposition</li>
+                <li>No blank or dot imports</li>
+                <li>sampledata: effectively 0 lines &gt;120</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-xl border border-stone-200 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="font-serif text-xl">4. Values, strings, types &amp; philosophy</h3>
+            <span class="rounded-full bg-emerald-100 text-emerald-900 text-sm font-medium px-3 py-1">7.6 / 10</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Top issues</p>
+              <ul class="space-y-2 text-stone-700">
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> ~76× map[string]interface{} + %v fallback</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> ~26 remaining " 0 R" concatenations</li>
+                <li><span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">med</span> Unescaped PDF literals for Title/Alt/Lang</li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider text-stone-500 mb-2">Done well</p>
+              <ul class="list-disc list-inside space-y-1 text-stone-700">
+                <li><strong>0</strong> third-party deps · <strong>0</strong> reflect</li>
+                <li>write.Ref on catalog/trailer paths</li>
+                <li>write.PDFString in pdfa OutputIntent</li>
+              </ul>
+              <p class="text-xs text-stone-500 mt-3">Strongest axis</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl">Score trajectory</h2>
+        <div class="rounded-xl border border-stone-200 bg-white overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100 text-left text-xs uppercase tracking-wider text-stone-500">
+              <tr>
+                <th class="px-4 py-3">Milestone</th>
+                <th class="px-4 py-3 text-right">Expected overall</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100">
+              <tr>
+                <td class="px-4 py-3">2026-07-25</td>
+                <td class="px-4 py-3 text-right text-stone-500">6.2</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">Today</td>
+                <td class="px-4 py-3 text-right font-semibold">6.7</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">After API + param bundles (steps 1–3)</td>
+                <td class="px-4 py-3 text-right">~7.6–7.8</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">After shared font + subset split (steps 1–5)</td>
+                <td class="px-4 py-3 text-right">~8.0–8.3</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">Full hygiene</td>
+                <td class="px-4 py-3 text-right text-emerald-700 font-medium">~8.7–9.0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl">Scope &amp; method</h2>
+        <div class="rounded-xl border border-stone-200 bg-white p-6 text-sm text-stone-700 space-y-3">
+          <p>
+            <strong class="text-slate-900">Scope:</strong> all <code class="text-xs bg-stone-100 px-1 rounded">.go</code> under
+            <code class="text-xs bg-stone-100 px-1 rounded">engine/</code> and
+            <code class="text-xs bg-stone-100 px-1 rounded">sampledata/</code>.
+          </p>
+          <p>
+            <strong class="text-slate-900">Skill:</strong> global
+            <code class="text-xs bg-stone-100 px-1 rounded">golang-code-style</code>
+            (samber/cc-skills-golang v1.2.2). Naming / lint / godoc are sibling skills and were not scored.
+          </p>
+          <p>
+            <strong class="text-slate-900">Agents:</strong> 4 dimension explore passes (control flow · functions · line/org · values);
+            findings merged by the orchestrator.
+          </p>
+        </div>
+      </section>
+
+      <footer class="border-t border-stone-200 pt-6 text-xs text-stone-500 flex flex-wrap justify-between gap-2">
+        <span>gocorepdfengine · golang-code-style review · 2026-07-29</span>
+        <span>Overall <strong class="text-slate-800">6.7 / 10</strong> · Grok Build</span>
+      </footer>
+    </main>
+  </body>
+</html>

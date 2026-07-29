@@ -26,6 +26,7 @@ __pycache__/
 # Zerodha bench outputs
 /sampledata/zerodha/zerodha_*_output.pdf
 /sampledata/zerodha/zerodha_*_nocomply_output.pdf
-/baselines/
+
 *.prof
 
+scripts/

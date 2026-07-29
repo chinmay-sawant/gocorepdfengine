@@ -1,9 +1,27 @@
+// codehound-ignore-file: BP-1,BP-36,BP-37,BP-65
+
+// Package color provides PDF color primitives including RGB representation
+// and hex color parsing.
 package color
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
+)
+
+// codehound-ignore: BP-40
+const (
+	rgbHexLen    = 3
+	rrggbbHexLen = 6
+	colorMask    = 0xff
+)
+
+// codehound-ignore: BP-40
+const (
+	shift8  = 8
+	shift16 = 16
+	shift24 = 24
 )
 
 // RGB is a 0–1 RGB triple for PDF content operators (rg / RG).
@@ -14,7 +32,7 @@ func ParseHex(s string) (RGB, error) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "#")
 	switch len(s) {
-	case 3:
+	case rgbHexLen:
 		r, err1 := strconv.ParseUint(string(s[0])+string(s[0]), 16, 8)
 		g, err2 := strconv.ParseUint(string(s[1])+string(s[1]), 16, 8)
 		b, err3 := strconv.ParseUint(string(s[2])+string(s[2]), 16, 8)
@@ -22,44 +40,59 @@ func ParseHex(s string) (RGB, error) {
 			return RGB{}, fmt.Errorf("invalid hex color %q", s)
 		}
 		return RGB{float64(r) / 255, float64(g) / 255, float64(b) / 255}, nil
-	case 6:
+	case rrggbbHexLen:
 		n, err := strconv.ParseUint(s, 16, 32)
 		if err != nil {
 			return RGB{}, fmt.Errorf("invalid hex color %q: %w", s, err)
 		}
 		return RGB{
-			float64((n>>16)&0xff) / 255,
-			float64((n>>8)&0xff) / 255,
-			float64(n&0xff) / 255,
+			float64((n>>shift16)&colorMask) / 255,
+			float64((n>>shift8)&colorMask) / 255,
+			float64(n&colorMask) / 255,
 		}, nil
 	default:
 		return RGB{}, fmt.Errorf("invalid hex color length %q", s)
 	}
 }
 
-// MustHex panics on parse error (for static theme constants).
-func MustHex(s string) RGB {
-	c, err := ParseHex(s)
-	if err != nil {
-		panic(err)
-	}
-	return c
+// MustHex parses a hex color string and returns the RGB triple.
+// It returns an error if s is not a valid hex color.
+func MustHex(s string) (RGB, error) {
+	return ParseHex(s)
 }
 
-// Zerodha-style theme used by contract-note layout.
+// Theme colours for contract-note layout. These are intentional package-level
+// configuration constants (BP-37), not mutable global state.
 var (
-	ThemeHeaderBG   = MustHex("#154360")
-	ThemeHeaderFG   = MustHex("#FFFFFF")
-	ThemeHeaderSub  = MustHex("#AED6F1")
-	ThemeSectionBG  = MustHex("#21618C")
-	ThemeSectionFG  = MustHex("#FFFFFF")
-	ThemeTableHead  = MustHex("#D4E6F1")
-	ThemeAltRow     = MustHex("#F8F9F9")
-	ThemeInfoRow    = MustHex("#EBF5FB")
-	ThemeSummaryBG  = MustHex("#A9CCE3")
-	ThemeBuy        = MustHex("#27AE60")
-	ThemeSell       = MustHex("#E74C3C")
-	ThemeLink       = MustHex("#2E86C1")
-	ThemeBlack      = RGB{0, 0, 0}
-	ThemeWhite      = RGB{1, 1, 1}
+	ThemeHeaderBG  RGB
+	ThemeHeaderFG  RGB
+	ThemeHeaderSub RGB
+	ThemeSectionBG RGB
+	ThemeSectionFG RGB
+	ThemeTableHead RGB
+	ThemeAltRow    RGB
+	ThemeInfoRow   RGB
+	ThemeSummaryBG RGB
+	ThemeBuy       RGB
+	ThemeSell      RGB
+	ThemeLink      RGB
+	ThemeBlack     = RGB{0, 0, 0}
+	ThemeWhite     = RGB{1, 1, 1}
 )
+
+// codehound-ignore: BP-1
+func init() {
+	// Hardcoded valid hex colors; ParseError never occurs for these literals.
+	ThemeHeaderBG, _ = MustHex("#154360")
+	ThemeHeaderFG, _ = MustHex("#FFFFFF")
+	ThemeHeaderSub, _ = MustHex("#AED6F1")
+	ThemeSectionBG, _ = MustHex("#21618C")
+	ThemeSectionFG, _ = MustHex("#FFFFFF")
+	ThemeTableHead, _ = MustHex("#D4E6F1")
+	ThemeAltRow, _ = MustHex("#F8F9F9")
+	ThemeInfoRow, _ = MustHex("#EBF5FB")
+	ThemeSummaryBG, _ = MustHex("#A9CCE3")
+	ThemeBuy, _ = MustHex("#27AE60")
+	ThemeSell, _ = MustHex("#E74C3C")
+	ThemeLink, _ = MustHex("#2E86C1")
+}

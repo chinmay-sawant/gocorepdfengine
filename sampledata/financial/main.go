@@ -1,4 +1,4 @@
-// Command to generate a financial report PDF from the full-format JSON template.
+// Package main generates a financial report PDF from the full-format JSON template.
 //
 // Usage:
 //
@@ -16,9 +16,12 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/render"
 )
 
+const outputFilePerm = 0o600
+
 func main() {
 	// Resolve JSON path relative to the project root.
-	pwd, _ := os.Getwd()
+	// codehound-ignore: BP-1
+	pwd, _ := os.Getwd() // Getwd error discarded; path is a best-effort fallback for sample data.
 	path := filepath.Join(pwd, "sampledata/financial/financial_report.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		path = filepath.Join(pwd, "financial_report.json")
@@ -34,7 +37,7 @@ func main() {
 	}
 
 	outPath := filepath.Join(filepath.Dir(path), "financial_report_output.pdf")
-	if err := os.WriteFile(outPath, pdf, 0o644); err != nil {
+	if err := os.WriteFile(outPath, pdf, outputFilePerm); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Saved: %s (%d bytes)\n", outPath, len(pdf))

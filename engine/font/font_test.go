@@ -1,6 +1,7 @@
 package font
 
 import (
+	"encoding/binary"
 	"os"
 	"strings"
 	"testing"
@@ -236,6 +237,7 @@ func TestRegistry(t *testing.T) {
 	got := r.Get("MyFont")
 	if got == nil {
 		t.Fatal("Get returned nil after Register")
+		return
 	}
 	if got.Name != "MyFont" {
 		t.Errorf("got.Name = %q, want %q", got.Name, "MyFont")
@@ -260,6 +262,7 @@ func TestRegistryStandardFont(t *testing.T) {
 	}
 	if font == nil {
 		t.Fatal("RegisterStandardFont returned nil font")
+		return
 	}
 	if font.UnitsPerEm == 0 {
 		t.Error("font.UnitsPerEm is 0")
@@ -301,6 +304,82 @@ func TestGenerateSubset(t *testing.T) {
 	}
 	if len(f.SubsetData) >= len(f.RawData) {
 		t.Logf("SubsetData len %d >= RawData len %d (may be expected for small subsets)", len(f.SubsetData), len(f.RawData))
+	}
+}
+
+// TestGenerateSubsetValidTTF ensures the subset is a structurally valid TrueType
+// font (sfntVersion, loca/maxp consistency) that can be re-parsed — required for
+// PDF/A-4 / PDF/UA-2 "font is damaged or invalid" checks.
+func TestGenerateSubsetValidTTF(t *testing.T) {
+	path := findLiberationFont()
+	if path == "" {
+		t.Skip("TTF not found, install Liberation fonts")
+	}
+	f, err := LoadFromPath(path)
+	if err != nil {
+		t.Fatalf("LoadFromPath(%q) = %v", path, err)
+	}
+
+	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 CONFIDENTIAL")
+	f.AddChars(chars)
+	if err = f.GenerateSubset(); err != nil {
+		t.Fatalf("GenerateSubset: %v", err)
+	}
+	sub := f.SubsetData
+	if len(sub) < 12 {
+		t.Fatal("subset too short")
+	}
+	// sfntVersion must be 0x00010000 → bytes 00 01 00 00
+	if sub[0] != 0 || sub[1] != 1 || sub[2] != 0 || sub[3] != 0 {
+		t.Fatalf("bad sfntVersion bytes %02x %02x %02x %02x; want 00 01 00 00",
+			sub[0], sub[1], sub[2], sub[3])
+	}
+
+	// Re-parse subset as a full TTF.
+	subFont, err := LoadFromBytes(sub)
+	if err != nil {
+		t.Fatalf("LoadFromBytes(subset) failed (font damaged): %v", err)
+	}
+
+	// Every used character must map through the subset cmap to a non-zero GID
+	// (except we accept that .notdef is 0 only if the original lacked the char).
+	for _, r := range chars {
+		gid, ok := subFont.cmap[r]
+		if !ok {
+			t.Errorf("subset cmap missing rune %q (U+%04X)", r, r)
+			continue
+		}
+		if gid == 0 && r != 0 {
+			// space is fine if present; letters must not be .notdef
+			if r != ' ' {
+				t.Errorf("subset cmap maps %q to .notdef", r)
+			}
+		}
+	}
+
+	// loca entry count must be numGlyphs+1
+	maxp, err := findTable(sub, "maxp")
+	if err != nil {
+		t.Fatalf("subset maxp: %v", err)
+	}
+	numGlyphs := binary.BigEndian.Uint16(maxp[4:])
+	loca, err := findTable(sub, "loca")
+	if err != nil {
+		t.Fatalf("subset loca: %v", err)
+	}
+	head, err := findTable(sub, "head")
+	if err != nil {
+		t.Fatalf("subset head: %v", err)
+	}
+	locaFmt := binary.BigEndian.Uint16(head[50:])
+	var locaEntries int
+	if locaFmt == 0 {
+		locaEntries = len(loca) / 2
+	} else {
+		locaEntries = len(loca) / 4
+	}
+	if locaEntries != int(numGlyphs)+1 {
+		t.Fatalf("loca entries %d != numGlyphs+1 (%d)", locaEntries, int(numGlyphs)+1)
 	}
 }
 

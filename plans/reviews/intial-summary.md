@@ -2,13 +2,15 @@
 
 ## Build context (read first)
 
-This application was built **without running a linter** — no `golangci-lint`, gofmt-as-gate, staticcheck pipeline, or other automated style/lint gate was part of the build loop. Implementation used **pure DeepSeek v4 flash** only (no multi-model / multi-agent coding stack for product code), guided by the **markdown plans already in this repo based on the earlier gopdfsuit** (`plans/` baseplan + phase docs). End-to-end build time was approximately **6–7 hours**.
+This application was built **without running a linter** — no `golangci-lint`, gofmt-as-gate, staticcheck pipeline, or other automated style/lint gate was part of the original build loop. Implementation used **pure DeepSeek v4 flash** only (no multi-model / multi-agent coding stack for product code), guided by the **markdown plans already in this repo based on the earlier gopdfsuit** (`plans/` baseplan + phase docs). End-to-end build time was approximately **6–7 hours**.
 
-The scores below (mid-6s across style, architecture, and leanness) should be read in that light: concentrated debt is expected for a plan-driven, no-lint, single-model sprint of that length — not a multi-week polished engine.
+**Post-build work (after 2026-07-25 reviews):** Codehound PERF/lint fixes, PDF/A-4 and PDF/UA-2 compliance hardening, product-path font subsetting, assembler helper extraction, `.golangci.yml` + `make lint-all`, ICC Length tests, and benchmark updates on branch `chore/after-codehound`.
 
-**Generated:** 2026-07-25  
+The original mid-6s scores should be read as plan-driven, no-lint, single-model sprint debt. The **2026-07-29 follow-up** re-scores after those improvements.
+
+**Generated:** 2026-07-25 · **Updated:** 2026-07-29  
 **Source directory:** `plans/reviews/`  
-**Sources read:** 3 Markdown reviews + 2 HTML companions  
+**Sources read:** 6 Markdown reviews (3 baseline + 3 follow-up) + 4 HTML companions  
 
 ---
 
@@ -16,21 +18,44 @@ The scores below (mid-6s across style, architecture, and leanness) should be rea
 
 | Review | Markdown | HTML companion |
 |--------|----------|----------------|
-| Go code style | `golang-code-style/2026-07-25-golang-code-style-review.md` | `golang-code-style/golang-code-style-review-20260725-011756.html` |
-| Architecture | `improve-codebase-architecture/2026-07-25-architecture-review.md` | `improve-codebase-architecture/architecture-review-20260725-011032.html` |
-| Ponytail ultra (leanness) | `ponytail/ponytail-ultra-2026-07-25.md` | *(none)* |
+| Go code style (baseline) | `golang-code-style/2026-07-25-golang-code-style-review.md` | `golang-code-style/golang-code-style-review-20260725-011756.html` |
+| Go code style (**follow-up**) | `golang-code-style/2026-07-29-golang-code-style-review.md` | `golang-code-style/golang-code-style-review-20260729-121831.html` |
+| Architecture (baseline) | `improve-codebase-architecture/2026-07-25-architecture-review.md` | `improve-codebase-architecture/architecture-review-20260725-011032.html` |
+| Architecture (**follow-up**) | `improve-codebase-architecture/2026-07-29-architecture-review.md` | `improve-codebase-architecture/architecture-review-20260729-121831.html` |
+| Ponytail ultra (baseline) | `ponytail/ponytail-ultra-2026-07-25.md` | *(none)* |
+| Ponytail ultra (**follow-up**) | `ponytail/ponytail-ultra-2026-07-29.md` | *(none)* |
 
 ---
 
 ## Overall ratings at a glance
 
-| Review | Markdown overall | HTML overall | Match? | Band / framing |
-|--------|-----------------:|-------------:|--------|----------------|
-| **Go code style** | **6.2 / 10** | **6.2 / 10** | Match (Δ 0.0) | Readable with concentrated style debt |
-| **Architecture** | **6.2 / 10** | **6.2 / 10** | Match (Δ 0.0) | Works with known debt |
-| **Ponytail leanness** | **6.3 / 10** | N/A | N/A | First-order bloat |
+### Baseline (2026-07-25)
 
-All three land in the mid-6s: product path works, but dual assembly, dead compliance scaffolding, and concentrated debt keep scores out of the 8+ band.
+| Review | Overall | Band / framing |
+|--------|--------:|----------------|
+| **Go code style** | **6.2 / 10** | Readable with concentrated style debt |
+| **Architecture** | **6.2 / 10** | Works with known debt |
+| **Ponytail leanness** | **6.3 / 10** | First-order bloat |
+
+### Follow-up (2026-07-29) — **current** (perf-corrected)
+
+| Review | Prev | **Now** | Δ | Band / framing |
+|--------|-----:|--------:|--:|----------------|
+| **Go code style** | 6.2 | **6.7 / 10** | **+0.5** | Style axes only — 2× ops/sec is not a style win |
+| **Architecture** | 6.2 | **6.8 / 10** | **+0.6** | Delivery/leverage credit for ~2× compliant bench |
+| **Ponytail leanness** | 6.3 | **6.8 / 10** | **+0.5** | Surface still mid; hot-path ceilings credited |
+| **Product throughput (side)** | — | **8.5 / 10** | — | Recorded ops/sec — not a style/ponytail axis |
+
+### Performance ladder (compliant Zerodha x10, `baselines/`)
+
+| Snapshot | Mean ops/sec | Best ops/sec |
+|----------|-------------:|-------------:|
+| b4 (pre–Codehound) | **1155.75** | 1226.41 |
+| 2k mid | **1947.97** | 2033.34 |
+| **Current latest** | **2349.29** | **2530.34** |
+| Peak historical (pruned) | **2739.27** | **2941.49** |
+
+**Lift:** mean **~2.03×** vs b4 (1156 → 2349); best **~2.5k** current, peak **~2.9k**. An intermediate 6.1 architecture draft under-weighted this — **corrected to 6.8**.
 
 ---
 
@@ -46,106 +71,108 @@ All three land in the mid-6s: product path works, but dual assembly, dead compli
 
 | Review | Method |
 |--------|--------|
-| Go code style | 4 parallel explore agents (control flow · functions/vars · line length/org · values/strings/philosophy) |
-| Architecture | 3 parallel explore agents (module depth · coupling/seams · testability) |
-| Ponytail | 3 parallel explore agents + orchestrator synthesis |
+| Go code style | 4 dimension explore passes (control flow · functions/vars · line length/org · values/strings/philosophy) |
+| Architecture | 3 explore passes (module depth · coupling/seams · testability) |
+| Ponytail | 3 explore agents + orchestrator synthesis |
+
+Follow-up (2026-07-29): same three review types, each driven by a dedicated explore subagent re-scoring against the 2026-07-25 baselines after Codehound/compliance work.
 
 ---
 
-## Ratings detail (Markdown + HTML)
+## Ratings detail (current = 2026-07-29)
 
-### 1. Go code style — **6.2 / 10**
+### 1. Go code style — **6.7 / 10** (was 6.2)
 
-**HTML vs MD:** Overall and all four axis scores match. HTML adds progress bars (`62%` overall, axis widths 65/55/55/74) and a finding-volume dashboard; numbers are the same.
+| Axis | 2026-07-25 | **2026-07-29** | Δ |
+|------|----------:|---------------:|--:|
+| Control flow | 6.5 | **7.2** | +0.7 |
+| Function design & variables | 5.5 | **6.0** | +0.5 |
+| Line length, breaking & file org | 5.5 | **5.9** | +0.4 |
+| Values, strings, types & philosophy | 7.4 | **7.6** | +0.2 |
+| **Equal-weight overall** | **6.2** | **6.7** | **+0.5** |
 
-| Axis | Score |
-|------|------:|
-| Control flow | **6.5 / 10** |
-| Function design & variables | **5.5 / 10** |
-| Line length, breaking & file org | **5.5 / 10** |
-| Values, strings, types & philosophy | **7.4 / 10** |
-| **Equal-weight overall** | **6.2 / 10** |
+**Formula:** `(7.2 + 6.0 + 5.9 + 7.6) / 4 = 6.675 → 6.7`
 
-**Formula:** `(6.5 + 5.5 + 5.5 + 7.4) / 4 = 6.225 → 6.2`
+**Finding volume:** High **4** (was 8) · Medium **30** (was 35) · Low **6** (was 17) · Total **40** (was 60)
 
-**Finding volume:** High **8** · Medium **35** · Low **17** · Total **60** (raw; some issues appear in more than one dimension)
+**Biggest wins:** assembler decomposition (`GenerateDocument` ~169 lines was ~355); `fmt.Sprintf("%d 0 R")` → **0** (catalog uses `write.Ref`).
 
-**Score trajectory (expected overall after cleanup):**
+**Still open:** `StyledCell` 74 one-line 7-arg calls; helpers with 8–11 params; `map[string]interface{}` ~76.
 
-| Milestone | Expected overall |
-|-----------|-----------------:|
-| Today | **6.2** |
-| Steps 1–3 (API + assemblers) | **~7.5** |
-| Steps 1–5 (encoding + subset split) | **~8.0–8.5** |
-| Full hygiene | **~8.5–9.0** |
-
-**Band guide:** 8–10 excellent · 6–7 readable with debt · 4–5 fragile · ≤3 hostile
+**Score trajectory:** Today **6.7** → API+param bundles **~7.6–7.8** → full hygiene **~8.7–9.0**
 
 ---
 
-### 2. Architecture — **6.2 / 10**
+### 2. Architecture — **6.8 / 10** (was 6.2)
 
-**HTML vs MD:** Headline overall **matches** (both **6.2 / 10**). Differences:
+| Dimension | Prev | **Now** | In HTML header? |
+|-----------|-----:|--------:|:---------------:|
+| Architecture depth | 5.5 | **6.5** | Yes |
+| Seam discipline | 4.5 | **5.0** | Yes |
+| Locality | 6.5 | **6.5** | No |
+| Leverage | 6.0 | **7.5** | Yes (**2× bench**) |
+| Testability | 4.0 | **5.0** | No |
+| Compliance design | 6.0 | **6.5** | Yes |
+| AI-navigability | 7.5 | **7.5** | No |
+| Complexity control | 5.0 | **6.5** | No |
+| Documentation | 6.5 | **7.0** | No |
+| Delivery vs plan | 7.0 | **8.5** | Yes (phase 8 + partial phase 6) |
+| **Weighted overall** | **6.2** | **6.8** | **6.8** |
 
-| Aspect | Markdown | HTML |
-|--------|----------|------|
-| Overall | **6.2 / 10** | **6.2 / 10** |
-| Axis set | **10 dimensions** scored | Header shows only **5** tiles |
-| Formula | Weighted ≈ **5.79**, then qualitative uplift for working product path → **6.2** | Formula **not** restated; badge still shows **6.2** |
-| Work-item strength | Strong / Worth exploring | Same badges (`Strong`, `Worth exploring`) + process chips |
+**Formula:** raw ≈ **6.45** + uplift for 2× compliant product throughput → **6.8**.  
+**Product throughput side score:** **8.5 / 10**.
 
-**Full MD dimension scores:**
+**Resolved / improved:** product-path subset; document helpers; ICC Length tests; lint gate; **~2× ops/sec**; pools/LRU/pre-parse.
 
-| Dimension | Score | In HTML header? |
-|-----------|------:|:---------------:|
-| Architecture depth | **5.5** | Yes |
-| Seam discipline | **4.5** | Yes |
-| Locality | **6.5** | No |
-| Leverage | **6.0** | No |
-| Testability | **4.0** | Yes |
-| Compliance design | **6.0** | Yes |
-| AI-navigability | **7.5** | Yes |
-| Complexity control | **5.0** | No |
-| Documentation | **6.5** | No |
-| Delivery vs plan | **7.0** | No |
-| **Weighted overall** | **6.2** | **6.2** |
+**Still open:** dual assemblers; Manager unwired; product path untested in `go test`; silent empty FontFile2.
 
-**Candidate strength labels (both formats):** Items 1–5 **Strong**; 6 **Worth exploring** (shared render finish). Top recommendation: collapse dual assemblers + single font-embed facade.
+**NEW drift:** `/Tabs /S` only on demo `Generate`, not `GenerateDocument`.
 
-**Risk severity labels (MD):** Product PDF without subset **High** · Silent empty FontFile2 **High** · UA overstated **Medium–High** · Assembler drift **Medium** · Fixture/test gap **Medium**
+**Top recommendation:** protect baseline gates, then unify assembly + product-path tests.
 
 ---
 
-### 3. Ponytail ultra — **6.3 / 10** (Markdown only)
+### 3. Ponytail ultra — **6.8 / 10** (was 6.3) · Markdown only
 
-No HTML companion under `ponytail/`.
-
-| Metric | Score |
-|--------|------:|
-| **Ponytail leanness (overall)** | **6.3 / 10** |
-| Dead API surface | **4.3 / 10** |
-| Duplication | **5.0 / 10** |
-| Over-abstraction | **5.3 / 10** |
-| Intentional shortcuts | **8.0 / 10** |
-| Dependency bloat | **10 / 10** |
-| Scaffolding debt | **3.5 / 10** |
+| Metric | Prev | **Now** | Δ |
+|--------|-----:|--------:|--:|
+| **Ponytail leanness (overall)** | 6.3 | **6.8** | +0.5 |
+| Dead API surface | 4.3 | **4.6** | +0.3 |
+| Duplication | 5.0 | **5.3** | +0.3 |
+| Over-abstraction | 5.3 | **5.4** | +0.1 |
+| Intentional shortcuts | 8.0 | **8.6** | +0.6 |
+| Dependency bloat | **10** | **10** | 0 |
+| Scaffolding debt | 3.5 | **3.6** | +0.1 |
 
 **By area (weighted):**
 
-| # | Area | Rating | Weight | ~Items / slop |
-|---|------|-------:|-------:|---------------|
-| 1 | Core assembly + encode | **6.4** | 25% | 22 items · ~450L |
-| 2 | Feature modules | **6.7** | 50% | 28 items · ~400L |
-| 3 | Compliance + samples + harness | **5.7** | 25% | 18 items · ~400L |
-| | **Weighted overall** | **6.3** | | **68 items · ~1,200L** |
+| # | Area | Prev | **Now** | Weight |
+|---|------|-----:|--------:|-------:|
+| 1 | Core assembly + encode | 6.4 | **6.8** | 25% |
+| 2 | Feature modules | 6.7 | **7.1** | 50% |
+| 3 | Compliance + samples + harness | 5.7 | **6.0** | 25% |
+| | **Weighted overall** | **6.3** | **6.8** | |
 
-**Formula:** `6.4×0.25 + 6.7×0.50 + 5.7×0.25 = 6.375 → 6.3`
+**Formula:** `6.8×0.25 + 7.1×0.50 + 6.0×0.25 = 6.75 → 6.8`
 
-**Remediation lift (estimated):** full pass ~900–1,200L removable → **~7.5–7.8**
+**Resolved checklist items:** product-path subset; format-4 glyphIDArray fix; dead `xmpPacketPrefix`; some content ops removed; hot-path ceilings credited for **~2×** bench.
 
-**Scale:** 9–10 YAGNI-clean · 8.x lean · 7.x second-order · **6.x first-order bloat (current)** · &lt;6 over-engineered
+**Still ~1,180L removable** across ~63 open items. Deps still **10/10**. LOC under review ~8,300 (was ~6,622).
 
-**LOC under review:** ~6,622 (engine + sampledata)
+**Remediation lift (estimated):** full pass ~850–1,000L → **~7.6–7.9** (without regressing baselines)
+
+---
+
+## Shared themes across all reviews (updated 2026-07-29, perf-corrected)
+
+1. **~2× compliant product throughput is the headline product win** — b4 **1156** → current **2349** mean ops/sec (best **2530**, peak hist. **~2941**). Side score **8.5**.
+2. **Dual assembly remains top structural debt** — speed and seam debt coexist; Tabs drift is the proof.
+3. **Product-path subset** — correctness win that also feeds size/throughput.
+4. **Dead compliance depth** — `structure.Manager` still unwired; most of `pdfa` unused; live UA is still Document→P.
+5. **Product path still under-tested in `go test`** — baselines/x10 are the real regression net; unit tests lag.
+6. **Zero third-party deps** — still perfect on style/ponytail dependency axes.
+7. **Style improved for different reasons** — assembler extraction + `write.Ref`; 2× ops/sec does not raise `StyledCell` scores.
+8. **Highest-leverage next step:** protect `baselines/` gates, then collapse dual assembly + product-path tests — without trading away the 2× path.
 
 ---
 
@@ -155,86 +182,65 @@ No HTML companion under `ponytail/`.
 
 | Review | Scope |
 |--------|--------|
-| Go code style | All `.go` under `engine/` and `sampledata/` (~36 files, 16 packages) |
+| Go code style | All `.go` under `engine/` and `sampledata/` |
 | Architecture | `engine/**`, `sampledata/**`, `plans/**`, `compliance/**`, `Makefile` |
 | Ponytail | `engine/**`, `sampledata/**`, compliance harness (high level) |
 
 ### Core assembly (all three)
 
-- `engine/engine.go` — demo `Generate`
-- `engine/document.go` — product `GenerateDocument`
-- Dual-assembler / subset drift called out repeatedly (demo subsets; product often full embed)
-
-### Object model / encode
-
-- `engine/doc/` (`builder.go`)
-- `engine/write/` (`writer.go`)
-- `engine/page/`, `engine/content/`
-
-### Feature modules
-
-- `engine/font/` — `font.go`, `ttf.go`, `subset.go`, `liberation.go`, `emit.go`, `metrics.go`
-- `engine/layout/` — `layout.go`, `table.go`, `props.go`, `theme.go` (`StyledCell` heavily cited in style review)
-- `engine/image/image.go`
-- `engine/render/` — `contract_note.go`, `template.go`
-- `engine/model/` — `contract_note.go`, `template.go`
-
-### Compliance / meta
-
-- `engine/pdfa/pdfa.go` (mostly unused helpers)
-- `engine/structure/` — `manager.go` (dead / unwired), `structure.go`
-- `engine/meta/xmp.go`
-- `engine/color/` — `hex.go`, `profiles.go`
-
-### Samples & harness
-
-- `sampledata/**`, `sampledata/zerodha/bench.go`, dual `run_bench_x10*.sh`
-- `compliance/`, `compliance/verapdf/`, `compliance/run_verapdf.sh`
-- `verapdf_report.py`, `compliance/structure_tree_check.py`
-- `Makefile` (`make test-verify-pdfs`)
-
-### Plans & missing docs (architecture)
-
-- `plans/phase-01` … `plans/phase-08`, baseplan / `plans/phase-06-performance-pooling.md`
-- Missing called out: `CONTEXT.md`, ADRs, `CODING_STANDARDS.md`
-- Related: `../README.md`, `../baseplan/base-pdf-engine-pdfa4-pdfua2-plan.md`
+- `engine/engine.go` — demo `Generate` (+ `addFontObjects`)
+- `engine/document.go` — product `GenerateDocument` (+ helpers: content / font / structure / meta / catalog)
+- Subset now on **both** paths when load succeeds
 
 ### Notable symbols (cross-cutting)
 
-`Generate`, `GenerateDocument`, `StyledCell`, `LayOut*`, `buildSubsetTTF`, `runBenchmark`, `structure.Manager`, `font.Embed` (proposed), `write.Ref`, `map[string]interface{}`, `render.PDF` / `TemplatePDF`, `model.LoadJSON` / `LoadTemplate`
+`Generate`, `GenerateDocument`, `setupDocumentFont`, `addFontObjects`, `buildStructureTree`, `buildCatalog`, `StyledCell`, `LayOut*`, `GenerateSubset`, `structure.Manager`, `write.Ref`, `map[string]interface{}`, `render.PDF` / `TemplatePDF`
 
 ---
 
-## Shared themes across all reviews
-
-1. **Dual assembly** — `Generate` vs `GenerateDocument` is the top shared debt (style god-functions, architecture seam/subset drift, ponytail duplication).
-2. **Dead compliance depth** — `structure.Manager` unwired; much of `pdfa` unused; live path is thinner than package map suggests.
-3. **Product path weaker than demo** — subset / test coverage favor demo `Generate`; product path under-tested.
-4. **Zero third-party deps** — strength in style philosophy and ponytail dependency score (**10 / 10**).
-5. **Clear package map** — font, layout, doc called deep; root assembly and compliance wiring lag.
-6. **Highest-leverage fix** — collapse dual assembly + single font-embed facade; then purge dead surface / wire-or-delete Manager; add product-path tests.
-
----
-
-## HTML presentation notes (where HTML ≠ MD presentation)
+## HTML presentation notes
 
 | Item | Go style HTML | Architecture HTML |
 |------|---------------|-------------------|
-| Overall number vs MD | Same **6.2** | Same **6.2** |
-| Extra UI | Progress bars, severity chips, finding counts 8/35/17/60, trajectory table | Mermaid diagrams, Strong/Worth exploring cards, tested/untested chips |
-| Missing vs MD | Nothing material on scores | 5 of 10 MD axes omitted from header; no 5.79→6.2 uplift explanation |
-| Ponytail | — | No HTML file |
-
-**Bottom line on ratings:** For both pairs that have HTML, the **headline overall rating is identical to the Markdown**. Architecture HTML is a **subset of dimensions** for display only; use the Markdown for the full 10-axis scorecard and the qualitative uplift note.
+| Overall vs MD | Same **6.7** | Same **6.8** |
+| Extra UI | Progress bars, finding volume (4/30/6/40), trajectory, delta table | Mermaid graph, Strong cards, improved/open/new panels |
+| Delta badges | Axis Δ vs prior | Depth/Seams/Test/Compliance +0.5 chips |
+| Ponytail | — | No HTML file (same as baseline) |
 
 ---
 
 ## Source files (absolute)
 
+### Current (2026-07-29)
+
 ```
-/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/golang-code-style/2026-07-25-golang-code-style-review.md
-/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/golang-code-style/golang-code-style-review-20260725-011756.html
-/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/improve-codebase-architecture/2026-07-25-architecture-review.md
-/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/improve-codebase-architecture/architecture-review-20260725-011032.html
-/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/ponytail/ponytail-ultra-2026-07-25.md
+/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/golang-code-style/2026-07-29-golang-code-style-review.md
+/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/golang-code-style/golang-code-style-review-20260729-121831.html
+/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/improve-codebase-architecture/2026-07-29-architecture-review.md
+/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/improve-codebase-architecture/architecture-review-20260729-121831.html
+/home/chinmay/ChinmayPersonalProjects/gocorepdfengine/plans/reviews/ponytail/ponytail-ultra-2026-07-29.md
 ```
+
+### Baseline (2026-07-25)
+
+```
+.../golang-code-style/2026-07-25-golang-code-style-review.md
+.../golang-code-style/golang-code-style-review-20260725-011756.html
+.../improve-codebase-architecture/2026-07-25-architecture-review.md
+.../improve-codebase-architecture/architecture-review-20260725-011032.html
+.../ponytail/ponytail-ultra-2026-07-25.md
+```
+
+---
+
+## Codehound scan (2026-07-25 baseline note)
+
+```
+./codehound . --no-fail --no-terminal --profile all --export-context --export-chunks --no-cache
+scanned 32 files (5850 lines) in 125.2ms
+323 findings
+  severity: 2 high, 196 info, 68 low, 57 medium
+  top rules: BP-39 ×116, PERF-6 ×23, BP-27 ×17, PERF-35 ×17, BP-1 ×16
+```
+
+Much of the subsequent `chore/after-codehound` work addressed PERF/lint findings from this scan. The 2026-07-29 architecture/style/ponytail re-reviews evaluate the structural outcome of that work, not a fresh Codehound export.

@@ -12,11 +12,11 @@ import (
 
 func TestGenerateMinimalPDF(t *testing.T) {
 	result, err := Generate(Config{
-		Width:   595.276,
-		Height:  841.89,
-		Font:    "Helvetica",
+		Width:    595.276,
+		Height:   841.89,
+		Font:     "Helvetica",
 		FontSize: 12,
-		Text:    "Hello, PDF 2.0!",
+		Text:     "Hello, PDF 2.0!",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestGenerateMinimalPDF(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "test_output.pdf")
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("wrote %s (%d bytes)", path, len(data))
@@ -73,12 +73,12 @@ func TestGenerateMinimalPDF(t *testing.T) {
 
 func TestGeneratePDFA4(t *testing.T) {
 	result, err := Generate(Config{
-		Width:   595.276,
-		Height:  841.89,
-		Font:    "Helvetica",
+		Width:    595.276,
+		Height:   841.89,
+		Font:     "Helvetica",
 		FontSize: 12,
-		Text:    "PDF/A-4 test",
-		Mode:    doc.ModePDFA4,
+		Text:     "PDF/A-4 test",
+		Mode:     doc.ModePDFA4,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -112,13 +112,13 @@ func TestGeneratePDFA4(t *testing.T) {
 
 func TestGeneratePDFUA2(t *testing.T) {
 	result, err := Generate(Config{
-		Width:   595.276,
-		Height:  841.89,
-		Font:    "Helvetica",
+		Width:    595.276,
+		Height:   841.89,
+		Font:     "Helvetica",
 		FontSize: 12,
-		Text:    "PDF/UA-2 test",
-		Mode:    doc.ModePDFUA2,
-		Lang:    "en-US",
+		Text:     "PDF/UA-2 test",
+		Mode:     doc.ModePDFUA2,
+		Lang:     "en-US",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -156,15 +156,15 @@ func TestGeneratePDFUA2(t *testing.T) {
 
 func TestGeneratePDFA4WithUA2(t *testing.T) {
 	result, err := Generate(Config{
-		Width:   595.276,
-		Height:  841.89,
-		Font:    "Helvetica",
+		Width:    595.276,
+		Height:   841.89,
+		Font:     "Helvetica",
 		FontSize: 12,
-		Text:    "PDF/A-4 + UA-2 test",
-		Mode:    doc.ModePDFA4 | doc.ModePDFUA2,
-		Lang:    "en-US",
-		Title:   "Combined Test",
-		Author:  "Test Author",
+		Text:     "PDF/A-4 + UA-2 test",
+		Mode:     doc.ModePDFA4 | doc.ModePDFUA2,
+		Lang:     "en-US",
+		Title:    "Combined Test",
+		Author:   "Test Author",
 	})
 	if err != nil {
 		t.Fatal(err)

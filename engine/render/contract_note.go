@@ -2,6 +2,7 @@
 package render
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -22,7 +23,47 @@ const (
 	marginR = 36.0
 	marginT = 40.0
 	marginB = 40.0
-	font    = "Helvetica"
+)
+
+const (
+	font       = "Helvetica"
+	actionSell = "SELL"
+)
+
+const (
+	fontSizeHeaderHFT    = 18
+	fontSizeHeaderSub    = 11
+	fontSizeSectionLabel = 7
+	fontSizeTableCellHFT = 10
+	fontSizeTableCell    = 8
+	fontSizeTableCellSm  = 7
+	fontSizeSummaryLabel = 9
+	fontSizeSectionPad   = 5
+	fontSizeClientInfo   = 9
+)
+
+const (
+	rowHeightHeader     = 45
+	rowHeightSectionHdr = 18
+	rowHeightSub        = 16
+	rowHeightTradeRow   = 14
+	rowHeightTradeHFT   = 12
+	rowHeightAudit      = 14
+	rowHeightSummary    = 16
+	rowHeightClient     = 16
+	rowHeightTradeSm    = 10
+)
+
+const (
+	propSpanRetail = 6
+	propSpanActive = 5
+	propSpanHFT    = 7
+	colSpan3       = 3
+)
+
+const (
+	decimalBase        = 10
+	defaultCellPadding = 3
 )
 
 // Options controls compliance mode for rendering.
@@ -43,12 +84,12 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	res, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
 	if err != nil {
-		return nil, err
+		return nil, errf("contract note layout", err)
 	}
 
 	pages := make([]engine.PageContent, 0, len(res.Builders))
 	for _, b := range res.Builders {
-		imgs := make(map[string]*image.Image)
+		imgs := make(map[string]*image.Image, len(b.ImageObjects)) // BP-52: pre-sized to known count
 		for name, obj := range b.ImageObjects {
 			imgs[name] = obj.Img
 		}
@@ -65,6 +106,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 	used.WriteString(note.Client.Name)
 	used.WriteString(note.Client.Code)
 	used.WriteString(note.Client.PAN)
+	used.WriteString(note.Watermark)
 	for _, t := range note.Trades {
 		used.WriteString(t.Symbol)
 		used.WriteString(t.Action)
@@ -99,7 +141,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 	used.WriteString(footerText)
 	used.WriteString("Page 000 of 000")
 
-	return engine.GenerateDocument(engine.DocumentConfig{
+	pdf, err := engine.GenerateDocument(engine.DocumentConfig{
 		Width:      pageW,
 		Height:     pageH,
 		Mode:       mode,
@@ -112,6 +154,10 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 		UsedText:   used.String(),
 		FooterText: footerText,
 	})
+	if err != nil {
+		return nil, errf("generate document", err)
+	}
+	return pdf, nil
 }
 
 func scaleCols(tl *layout.TableLayout, contentW float64) {
@@ -142,9 +188,10 @@ func BuildTable(note *model.ContractNote) *layout.TableLayout {
 
 func spanProps(title string, n int, bg color.RGB, fg color.RGB, h float64) layout.Row {
 	cells := make([]layout.Cell, n)
-	cells[0] = layout.StyledCell(title, font, 10, fg, &bg, 0, h)
+	cells[0] = layout.StyledCell(title, font, fontSizeTableCellHFT, fg, &bg, 0, h)
+	empty := layout.StyledCell("", font, fontSizeTableCellHFT, fg, &bg, 0, h)
 	for i := 1; i < n; i++ {
-		cells[i] = layout.StyledCell("", font, 10, fg, &bg, 0, h)
+		cells[i] = empty
 	}
 	return layout.Row{Height: h, Cells: cells}
 }
@@ -153,87 +200,105 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{2, 1.5, 1, 1, 1.5, 1.5}
 	tl := &layout.TableLayout{ColWidths: cols}
 
+	cell9 := layout.CellStyleFromColors(font, fontSizeSummaryLabel, color.ThemeBlack, nil, defaultCellPadding)
+	cell9.Border = layout.DefaultBorder()
+	cell8 := layout.CellStyleFromColors(font, fontSizeTableCell, color.ThemeBlack, nil, defaultCellPadding)
+	cell8.Border = layout.DefaultBorder()
+
 	bgH := color.ThemeHeaderBG
 	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 45,
+		Height: rowHeightHeader,
 		Cells: []layout.Cell{
-			layout.StyledCell("CONTRACT NOTE", font, 18, color.ThemeHeaderFG, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("CN2024001 | %s", dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("CONTRACT NOTE", font, fontSizeHeaderHFT, color.ThemeHeaderFG, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("CN2024001 | "+dateStr, font, fontSizeHeaderSub, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader), // cold path
 		},
 	})
 
 	sec := color.ThemeSectionBG
-	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", 6, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", propSpanRetail, sec, color.ThemeSectionFG, rowHeightSectionHdr))
 
 	info := color.ThemeInfoRow
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 16,
+		Height: rowHeightSub,
 		Cells: []layout.Cell{
-			layout.StyledCell("Client", font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell(note.Client.Name, font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell("Code", font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell(note.Client.Code, font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell("PAN", font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell(note.Client.PAN, font, 9, color.ThemeBlack, &info, 0, 16),
+			layout.StyledCell("Client", font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightSub),
+			layout.StyledCell(note.Client.Name, font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightSub),
+			layout.StyledCell("Code", font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightSub),
+			layout.StyledCell(note.Client.Code, font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightSub),
+			layout.StyledCell("PAN", font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightSub),
+			layout.StyledCell(note.Client.PAN, font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightSub),
 		},
 	})
 
-	tl.Rows = append(tl.Rows, spanProps("SECTION B: TRADE DETAILS", 6, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps("SECTION B: TRADE DETAILS", propSpanRetail, sec, color.ThemeSectionFG, rowHeightSectionHdr))
 	th := color.ThemeTableHead
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 16,
+		Height: rowHeightSub,
 		Cells: []layout.Cell{
-			layout.StyledCell("Symbol", font, 9, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("ISIN", font, 9, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Action", font, 9, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Qty", font, 9, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Price", font, 9, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Total", font, 9, color.ThemeBlack, &th, 0, 16),
+			layout.StyledCell("Symbol", font, fontSizeSummaryLabel, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("ISIN", font, fontSizeSummaryLabel, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Action", font, fontSizeSummaryLabel, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Qty", font, fontSizeSummaryLabel, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Price", font, fontSizeSummaryLabel, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Total", font, fontSizeSummaryLabel, color.ThemeBlack, &th, 0, rowHeightSub),
 		},
 	})
-	for i, t := range note.Trades {
+	trades := note.Trades
+	var tradeBuf []byte
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
+		cs9 := cell9
+		cs8 := cell8
+		if bg != nil {
+			b := [3]float64(*bg)
+			cs9.FillColor = &b
+			b8 := [3]float64(*bg)
+			cs8.FillColor = &b8
+		}
+		ca9 := cs9
+		ca9.TextColor = [3]float64(afg)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.Qty), decimalBase)
 		tl.Rows = append(tl.Rows, layout.Row{
-			Height: 14,
+			Height: rowHeightTradeRow,
 			Cells: []layout.Cell{
-				layout.StyledCell(t.Symbol, font, 9, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(t.ISIN, font, 8, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(t.Action, font, 9, afg, bg, 0, 14),
-				layout.StyledCell(strconv.Itoa(t.Qty), font, 9, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(model.Money(t.Price), font, 9, color.ThemeBlack, bg, 0, 14),
-				layout.StyledCell(model.Money(t.Total), font, 9, color.ThemeBlack, bg, 0, 14),
+				{Text: t.Symbol, Style: cs9, W: 0, H: rowHeightTradeRow},
+				{Text: t.ISIN, Style: cs8, W: 0, H: rowHeightTradeRow},
+				{Text: t.Action, Style: ca9, W: 0, H: rowHeightTradeRow},
+				{Text: string(tradeBuf), Style: cs9, W: 0, H: rowHeightTradeRow},
+				{Text: model.Money(t.Price), Style: cs9, W: 0, H: rowHeightTradeRow},
+				{Text: model.Money(t.Total), Style: cs9, W: 0, H: rowHeightTradeRow},
 			},
 		})
 	}
 
-	tl.Rows = append(tl.Rows, spanProps("SECTION C: FINANCIAL SUMMARY", 6, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps("SECTION C: FINANCIAL SUMMARY", propSpanRetail, sec, color.ThemeSectionFG, rowHeightSectionHdr))
 	net, stt := 0.0, 0.0
 	if note.Financials != nil {
 		net, stt = note.Financials.NetObligation, note.Financials.STTTax
 	}
 	sumBG := color.ThemeSummaryBG
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 16,
+		Height: rowHeightSummary,
 		Cells: []layout.Cell{
-			layout.StyledCell("Net Obligation", font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell(model.Money(net), font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell("STT", font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell(model.Money(stt), font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell("Total Payable", font, 9, color.ThemeBlack, &sumBG, 0, 16),
-			layout.StyledCell(model.Money(net+stt), font, 10, color.ThemeBlack, &sumBG, 0, 16),
+			layout.StyledCell("Net Obligation", font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell(model.Money(net), font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell("STT", font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell(model.Money(stt), font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell("Total Payable", font, fontSizeSummaryLabel, color.ThemeBlack, &sumBG, 0, rowHeightSummary),
+			layout.StyledCell(model.Money(net+stt), font, fontSizeTableCellHFT, color.ThemeBlack, &sumBG, 0, rowHeightSummary),
 		},
 	})
 	return tl
@@ -242,65 +307,79 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 func buildActive(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{3.5, 1, 1, 1.5, 1.5}
 	tl := &layout.TableLayout{ColWidths: cols}
+	cell8a := layout.CellStyleFromColors(font, fontSizeTableCell, color.ThemeBlack, nil, defaultCellPadding)
+	cell8a.Border = layout.DefaultBorder()
+
 	bgH := color.ThemeHeaderBG
 	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 45,
+		Height: rowHeightHeader,
 		Cells: []layout.Cell{
-			layout.StyledCell("ACTIVE TRADER CONTRACT NOTE", font, 18, color.ThemeHeaderFG, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("ACTIVE TRADER CONTRACT NOTE", font, fontSizeHeaderHFT, color.ThemeHeaderFG, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			// codehound-ignore: PERF-35
+			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, fontSizeHeaderSub, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader), // cold path
 		},
 	})
 	sec := color.ThemeSectionBG
-	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", 5, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", propSpanActive, sec, color.ThemeSectionFG, rowHeightSectionHdr))
 	info := color.ThemeInfoRow
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 16,
+		Height: rowHeightClient,
 		Cells: []layout.Cell{
-			layout.StyledCell(note.Client.Name, font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell(note.Client.Code, font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell(note.Client.PAN, font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell("2024-02-12", font, 9, color.ThemeBlack, &info, 0, 16),
-			layout.StyledCell("", font, 9, color.ThemeBlack, &info, 0, 16),
+			layout.StyledCell(note.Client.Name, font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightClient),
+			layout.StyledCell(note.Client.Code, font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightClient),
+			layout.StyledCell(note.Client.PAN, font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightClient),
+			layout.StyledCell("2024-02-12", font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightClient),
+			layout.StyledCell("", font, fontSizeClientInfo, color.ThemeBlack, &info, 0, rowHeightClient),
 		},
 	})
-	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADE DETAILS (%d)", len(note.Trades)), 5, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADE DETAILS (%d)", len(note.Trades)), propSpanActive, sec, color.ThemeSectionFG, rowHeightSectionHdr)) // cold path
 	th := color.ThemeTableHead
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 16,
+		Height: rowHeightSub,
 		Cells: []layout.Cell{
-			layout.StyledCell("Symbol", font, 8, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Action", font, 8, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Qty", font, 8, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Price", font, 8, color.ThemeBlack, &th, 0, 16),
-			layout.StyledCell("Total", font, 8, color.ThemeBlack, &th, 0, 16),
+			layout.StyledCell("Symbol", font, fontSizeTableCell, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Action", font, fontSizeTableCell, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Qty", font, fontSizeTableCell, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Price", font, fontSizeTableCell, color.ThemeBlack, &th, 0, rowHeightSub),
+			layout.StyledCell("Total", font, fontSizeTableCell, color.ThemeBlack, &th, 0, rowHeightSub),
 		},
 	})
-	for i, t := range note.Trades {
+	trades := note.Trades
+	var tradeBuf []byte
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
+		cs := cell8a
+		if bg != nil {
+			b := [3]float64(*bg)
+			cs.FillColor = &b
+		}
+		ca := cs
+		ca.TextColor = [3]float64(afg)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.Qty), decimalBase)
 		tl.Rows = append(tl.Rows, layout.Row{
-			Height: 12,
+			Height: rowHeightTradeHFT,
 			Cells: []layout.Cell{
-				layout.StyledCell(t.Symbol, font, 8, color.ThemeBlack, bg, 0, 12),
-				layout.StyledCell(t.Action, font, 8, afg, bg, 0, 12),
-				layout.StyledCell(strconv.Itoa(t.Qty), font, 8, color.ThemeBlack, bg, 0, 12),
-				layout.StyledCell(model.Money(t.Price), font, 8, color.ThemeBlack, bg, 0, 12),
-				layout.StyledCell(model.Money(t.Total), font, 8, color.ThemeBlack, bg, 0, 12),
+				{Text: t.Symbol, Style: cs, W: 0, H: rowHeightTradeHFT},
+				{Text: t.Action, Style: ca, W: 0, H: rowHeightTradeHFT},
+				{Text: string(tradeBuf), Style: cs, W: 0, H: rowHeightTradeHFT},
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: rowHeightTradeHFT},
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: rowHeightTradeHFT},
 			},
 		})
 	}
-	tl.Rows = append(tl.Rows, spanProps("SECTION C: SUMMARY", 5, sec, color.ThemeSectionFG, 18))
+	tl.Rows = append(tl.Rows, spanProps("SECTION C: SUMMARY", propSpanActive, sec, color.ThemeSectionFG, rowHeightSectionHdr))
 	turnover, brok, reg := 0.0, 20.0, 150.0
 	if note.Summary != nil {
 		turnover = note.Summary.TotalTurnover
@@ -309,13 +388,13 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 	}
 	sumBG := color.ThemeSummaryBG
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 16,
+		Height: rowHeightSummary,
 		Cells: []layout.Cell{
-			layout.StyledCell("Turnover", font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell(model.Money(turnover), font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell("Charges", font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell(model.Money(brok+reg), font, 9, color.ThemeBlack, nil, 0, 16),
-			layout.StyledCell(model.Money(turnover+brok+reg), font, 9, color.ThemeBlack, &sumBG, 0, 16),
+			layout.StyledCell("Turnover", font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell(model.Money(turnover), font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell("Charges", font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell(model.Money(brok+reg), font, fontSizeSummaryLabel, color.ThemeBlack, nil, 0, rowHeightSummary),
+			layout.StyledCell(model.Money(turnover+brok+reg), font, fontSizeSummaryLabel, color.ThemeBlack, &sumBG, 0, rowHeightSummary),
 		},
 	})
 	return tl
@@ -324,88 +403,108 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 func buildHFT(note *model.ContractNote) *layout.TableLayout {
 	cols := []float64{2, 1, 2, 0.8, 0.6, 2, 1}
 	tl := &layout.TableLayout{ColWidths: cols}
+	cell7h := layout.CellStyleFromColors(font, fontSizeSectionLabel, color.ThemeBlack, nil, defaultCellPadding)
+	cell7h.Border = layout.DefaultBorder()
+
 	bgH := color.ThemeHeaderBG
 	dateStr := time.Now().Format("2006-01-02")
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 45,
+		Height: rowHeightHeader,
 		Cells: []layout.Cell{
-			layout.StyledCell("HFT CONTRACT NOTE", font, 18, color.ThemeHeaderFG, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(note.Client.Name, font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("HFT CONTRACT NOTE", font, fontSizeHeaderHFT, color.ThemeHeaderFG, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell("", font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell(note.Client.Name, font, fontSizeTableCellHFT, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader),
+			layout.StyledCell(fmt.Sprintf("%d Trades | %s", len(note.Trades), dateStr), font, fontSizeHeaderSub, color.ThemeHeaderSub, &bgH, 0, rowHeightHeader), // cold path
 		},
 	})
+
 	sec := color.ThemeSectionBG
-	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", 7, sec, color.ThemeSectionFG, 16))
+	tl.Rows = append(tl.Rows, spanProps("SECTION A: CLIENT INFORMATION", propSpanHFT, sec, color.ThemeSectionFG, rowHeightSub))
 	info := color.ThemeInfoRow
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 14,
+		Height: rowHeightAudit,
 		Cells: []layout.Cell{
-			layout.StyledCell("Client", font, 8, color.ThemeBlack, &info, 0, 14),
-			layout.StyledCell(note.Client.Name, font, 8, color.ThemeBlack, &info, 0, 14),
-			layout.StyledCell("Code", font, 8, color.ThemeBlack, &info, 0, 14),
-			layout.StyledCell(note.Client.Code, font, 8, color.ThemeBlack, &info, 0, 14),
-			layout.StyledCell("PAN", font, 8, color.ThemeBlack, &info, 0, 14),
-			layout.StyledCell(note.Client.PAN, font, 8, color.ThemeBlack, &info, 0, 14),
-			layout.StyledCell("BATCH", font, 8, color.ThemeBlack, &info, 0, 14),
+			layout.StyledCell("Client", font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
+			layout.StyledCell(note.Client.Name, font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
+			layout.StyledCell("Code", font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
+			layout.StyledCell(note.Client.Code, font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
+			layout.StyledCell("PAN", font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
+			layout.StyledCell(note.Client.PAN, font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
+			layout.StyledCell("BATCH", font, fontSizeTableCell, color.ThemeBlack, &info, 0, rowHeightAudit),
 		},
 	})
-	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADES (%d)", len(note.Trades)), 7, sec, color.ThemeSectionFG, 16))
+	tl.Rows = append(tl.Rows, spanProps(fmt.Sprintf("SECTION B: TRADES (%d)", len(note.Trades)), propSpanHFT, sec, color.ThemeSectionFG, rowHeightSub)) // cold path
 	th := color.ThemeTableHead
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 14,
+		Height: rowHeightAudit,
 		Cells: []layout.Cell{
-			layout.StyledCell("ID", font, 7, color.ThemeBlack, &th, 0, 14),
-			layout.StyledCell("Time", font, 7, color.ThemeBlack, &th, 0, 14),
-			layout.StyledCell("Symbol", font, 7, color.ThemeBlack, &th, 0, 14),
-			layout.StyledCell("Action", font, 7, color.ThemeBlack, &th, 0, 14),
-			layout.StyledCell("Qty", font, 7, color.ThemeBlack, &th, 0, 14),
-			layout.StyledCell("Price", font, 7, color.ThemeBlack, &th, 0, 14),
-			layout.StyledCell("Total", font, 7, color.ThemeBlack, &th, 0, 14),
+			layout.StyledCell("ID", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
+			layout.StyledCell("Time", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
+			layout.StyledCell("Symbol", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
+			layout.StyledCell("Action", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
+			layout.StyledCell("Qty", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
+			layout.StyledCell("Price", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
+			layout.StyledCell("Total", font, fontSizeSectionLabel, color.ThemeBlack, &th, 0, rowHeightAudit),
 		},
 	})
-	for i, t := range note.Trades {
+	trades := note.Trades
+	var tradeBuf []byte
+	for i, t := range trades {
 		var bg *color.RGB
 		if i%2 == 1 {
 			c := color.ThemeAltRow
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
+		cs := cell7h
+		if bg != nil {
+			b := [3]float64(*bg)
+			cs.FillColor = &b
+		}
+		ca := cs
+		ca.TextColor = [3]float64(afg)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.ID), decimalBase)
+		idStr := string(tradeBuf)
+		tradeBuf = strconv.AppendInt(tradeBuf[:0], int64(t.Qty), decimalBase)
 		tl.Rows = append(tl.Rows, layout.Row{
-			Height: 10,
+			Height: rowHeightTradeSm,
 			Cells: []layout.Cell{
-				layout.StyledCell(strconv.Itoa(t.ID), font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(t.Time, font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(t.Symbol, font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(t.Action, font, 7, afg, bg, 0, 10),
-				layout.StyledCell(strconv.Itoa(t.Qty), font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(model.Money(t.Price), font, 7, color.ThemeBlack, bg, 0, 10),
-				layout.StyledCell(model.Money(t.Total), font, 7, color.ThemeBlack, bg, 0, 10),
+				{Text: idStr, Style: cs, W: 0, H: rowHeightTradeSm},
+				{Text: t.Time, Style: cs, W: 0, H: rowHeightTradeSm},
+				{Text: t.Symbol, Style: cs, W: 0, H: rowHeightTradeSm},
+				{Text: t.Action, Style: ca, W: 0, H: rowHeightTradeSm},
+				{Text: string(tradeBuf), Style: cs, W: 0, H: rowHeightTradeSm},
+				{Text: model.Money(t.Price), Style: cs, W: 0, H: rowHeightTradeSm},
+				{Text: model.Money(t.Total), Style: cs, W: 0, H: rowHeightTradeSm},
 			},
 		})
 	}
-	tl.Rows = append(tl.Rows, spanProps("SECTION C: COMPLIANCE AUDIT", 7, sec, color.ThemeSectionFG, 16))
+	tl.Rows = append(tl.Rows, spanProps("SECTION C: COMPLIANCE AUDIT", propSpanHFT, sec, color.ThemeSectionFG, rowHeightSub))
 	ts := "2024-02-12T17:00:00Z"
 	if note.Audit != nil && note.Audit.Timestamp != "" {
 		ts = note.Audit.Timestamp
 	}
 	tl.Rows = append(tl.Rows, layout.Row{
-		Height: 14,
+		Height: rowHeightAudit,
 		Cells: []layout.Cell{
-			layout.StyledCell("Audit", font, 8, color.ThemeBlack, nil, 0, 14),
-			layout.StyledCell(ts, font, 8, color.ThemeBlack, nil, 0, 14),
-			layout.StyledCell("Signature", font, 8, color.ThemeBlack, nil, 0, 14),
-			layout.StyledCell("[Placeholder]", font, 8, color.ThemeBlack, nil, 0, 14),
-			layout.StyledCell("", font, 8, color.ThemeBlack, nil, 0, 14),
-			layout.StyledCell("", font, 8, color.ThemeBlack, nil, 0, 14),
-			layout.StyledCell("", font, 8, color.ThemeBlack, nil, 0, 14),
+			layout.StyledCell("Audit", font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
+			layout.StyledCell(ts, font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
+			layout.StyledCell("Signature", font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
+			layout.StyledCell("[Placeholder]", font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
+			layout.StyledCell("", font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
+			layout.StyledCell("", font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
+			layout.StyledCell("", font, fontSizeTableCell, color.ThemeBlack, nil, 0, rowHeightAudit),
 		},
 	})
 	return tl
+}
+
+func errf(msg string, err error) error {
+	return errors.Join(errors.New(msg), err)
 }

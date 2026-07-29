@@ -1,32 +1,37 @@
+// codehound-ignore-file: BP-27
+
+// Package font provides PDF font types, TrueType/OpenType parsing, glyph
+// subsetting, CMap generation, and font-dictionary builders for embedding
+// fonts in PDF 2.0 / PDF/A-4 documents.
 package font
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/chinmay/gocorepdfengine/engine/doc"
 )
 
-func FontDict(baseFont string, cidFontRef, toUnicodeRef doc.ObjectID) map[string]interface{} {
+// Dict returns a raw PDF font dictionary (Type0 / CIDFont) for serialization.
+func Dict(baseFont string, cidFontRef, toUnicodeRef doc.ObjectID) map[string]interface{} {
 	return map[string]interface{}{
 		"/Type":            "/Font",
 		"/Subtype":         "/Type0",
 		"/BaseFont":        "/" + baseFont,
 		"/Encoding":        "/Identity-H",
-		"/DescendantFonts": []interface{}{fmt.Sprintf("%d 0 R", cidFontRef)},
-		"/ToUnicode":       fmt.Sprintf("%d 0 R", toUnicodeRef),
+		"/DescendantFonts": []interface{}{strconv.Itoa(int(cidFontRef)) + " 0 R"},
+		"/ToUnicode":       strconv.Itoa(int(toUnicodeRef)) + " 0 R",
 	}
 }
 
+// CIDFontDict returns a raw PDF CIDFont dictionary for serialization.
 func CIDFontDict(font *Font, descriptorRef, cidToGIDRef doc.ObjectID) map[string]interface{} {
-	// Default width: match the .notdef glyph (GID 0) width, since any unmapped
-	// CID falls back to .notdef and /DW must be consistent with the font program.
 	dw := font.DefaultWidth()
 	d := map[string]interface{}{
 		"/Type":           "/Font",
 		"/Subtype":        "/CIDFontType2",
 		"/BaseFont":       "/" + font.Name,
 		"/CIDSystemInfo":  CIDSystemInfoDict("Adobe", "Identity", 0),
-		"/FontDescriptor": fmt.Sprintf("%d 0 R", descriptorRef),
+		"/FontDescriptor": strconv.Itoa(int(descriptorRef)) + " 0 R",
 		"/DW":             dw,
 	}
 	if w := WidthsArray(font); w != nil {
@@ -35,12 +40,13 @@ func CIDFontDict(font *Font, descriptorRef, cidToGIDRef doc.ObjectID) map[string
 	if cidToGIDRef == 0 {
 		d["/CIDToGIDMap"] = "/Identity"
 	} else {
-		d["/CIDToGIDMap"] = fmt.Sprintf("%d 0 R", cidToGIDRef)
+		d["/CIDToGIDMap"] = strconv.Itoa(int(cidToGIDRef)) + " 0 R"
 	}
 	return d
 }
 
-func FontDescriptorDict(font *Font, fontFile2Ref doc.ObjectID) map[string]interface{} {
+// DescriptorDict returns a raw PDF FontDescriptor dictionary for serialization.
+func DescriptorDict(font *Font, fontFile2Ref doc.ObjectID) map[string]interface{} {
 	return map[string]interface{}{
 		"/Type":        "/FontDescriptor",
 		"/FontName":    "/" + font.Name,
@@ -52,24 +58,26 @@ func FontDescriptorDict(font *Font, fontFile2Ref doc.ObjectID) map[string]interf
 		"/CapHeight":   int(font.CapHeight),
 		"/StemV":       int(font.StemVValue()),
 		"/XHeight":     int(font.XHeight),
-		"/FontFile2":   fmt.Sprintf("%d 0 R", fontFile2Ref),
+		"/FontFile2":   strconv.Itoa(int(fontFile2Ref)) + " 0 R",
 	}
 }
 
+// CIDSystemInfoDict returns a raw PDF CIDSystemInfo dictionary for serialization.
 func CIDSystemInfoDict(registry, ordering string, supplement int) map[string]interface{} {
 	return map[string]interface{}{
-		"/Registry":   fmt.Sprintf("(%s)", registry),
-		"/Ordering":   fmt.Sprintf("(%s)", ordering),
+		"/Registry":   "(" + registry + ")",
+		"/Ordering":   "(" + ordering + ")",
 		"/Supplement": supplement,
 	}
 }
 
+// WidthsArray builds the /W array for a CIDFont, grouping contiguous CIDs with the same width.
 func WidthsArray(font *Font) []int {
 	keys := font.UsedRunes()
 	if len(keys) == 0 {
 		return nil
 	}
-	scale := 1000.0 / float64(font.UnitsPerEm)
+	scale := ttfUPEm / float64(font.UnitsPerEm)
 
 	// Groups of contiguous CIDs that share the same width
 	type cidRange struct{ first, last, width int }
@@ -81,7 +89,7 @@ func WidthsArray(font *Font) []int {
 		if !ok {
 			continue
 		}
-		width := int(float64(g.Width)*scale + 0.5)
+		width := int(float64(g.Width)*scale + roundingHalf)
 		if n := len(ranges); n > 0 && ranges[n-1].width == width && ranges[n-1].last+1 == cid {
 			ranges[n-1].last = cid
 		} else {
@@ -89,7 +97,7 @@ func WidthsArray(font *Font) []int {
 		}
 	}
 
-	result := make([]int, 0, len(ranges)*3)
+	result := make([]int, 0, len(ranges)*widthRangeDim)
 	for _, r := range ranges {
 		result = append(result, r.first, r.last, r.width)
 	}

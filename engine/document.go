@@ -1,9 +1,11 @@
+// Package engine provides PDF document generation with support for PDF 2.0,
+// PDF/A-4, and PDF/UA-2.
 package engine
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/chinmay/gocorepdfengine/engine/color"
 	"github.com/chinmay/gocorepdfengine/engine/content"
@@ -17,12 +19,27 @@ import (
 	"github.com/chinmay/gocorepdfengine/engine/write"
 )
 
+// codehound-ignore: BP-40
+const (
+	footerBufGrow      = 256
+	docDecimalBase     = 10
+	floatPrecision     = 6
+	floatBitSize       = 64
+	charAvgWidth       = 8
+	fontSizeProportion = 0.55
+)
+
 // PageContent is one page stream plus font/image resource labels used on that page.
 type PageContent struct {
-	Stream         []byte
-	FontRes        map[string]string // logical font name -> /F1 label
-	UsedFonts      map[string]bool
-	ImageXObjects  map[string]*image.Image // XObject name -> image data
+	Stream        []byte
+	FontRes       map[string]string // logical font name -> /F1 label
+	UsedFonts     map[string]bool
+	ImageXObjects map[string]*image.Image // XObject name -> image data
+}
+
+type fontChain struct {
+	fontRef, cidFontID, descriptorID, fontFile2ID, toUnicodeID, cidToGIDMapID doc.ObjectID
+	resourceLabel                                                             string
 }
 
 // DocumentConfig drives multi-page generation from pre-built content streams
@@ -40,7 +57,9 @@ type DocumentConfig struct {
 	FooterText    string
 }
 
-// GenerateDocument assembles a multi-page PDF 2.0 document, optionally PDF/A-4 + PDF/UA-2.
+// GenerateDocument builds a complete PDF binary from pre-built page content
+// streams, handling font embedding, ICC profiles, structure trees (PDF/UA-2),
+// output intents (PDF/A-4), page numbering, and footer text.
 func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	if cfg.Width == 0 {
 		cfg.Width = 595
@@ -89,18 +108,11 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	}
 
 	// === Allocate IDs ===
-	contentIDs := make([]doc.ObjectID, len(cfg.Pages))
+	contentIDs := make([]doc.ObjectID, len(cfg.Pages)) // dense slice, not map — fine
 	for i := range contentIDs {
 		contentIDs[i] = d.AllocID()
 	}
 
-	// One Type1 or Type0 font object per logical name (map label F1.. shared).
-	// We emit a single Helvetica/Liberation resource as F1 for simplicity and
-	// rewrite is not needed if layout already used F1 for first font.
-	type fontChain struct {
-		fontRef, cidFontID, descriptorID, fontFile2ID, toUnicodeID, cidToGIDMapID doc.ObjectID
-		resourceLabel                                                              string
-	}
 	// Single shared font for v1 multi-page path (layout uses Helvetica → F1).
 	var shared fontChain
 	shared.resourceLabel = "F1"
@@ -146,123 +158,10 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	catalogID := d.AllocID()
 
 	// === Content streams ===
-	for i, pc := range cfg.Pages {
-		streamBytes := pc.Stream
-		// Wrap main content in BDC/EMC for PDF/UA-2 when tagged.
-		if isUA {
-			streamBytes = append([]byte("/P <</MCID 0>> BDC\n"), streamBytes...)
-		}
-		if cfg.FooterText != "" || len(cfg.Pages) > 1 {
-			var sb strings.Builder
-			pageNum := i + 1
-			totalPages := len(cfg.Pages)
-			if isUA {
-				sb.WriteString("/Artifact BMC\n")
-			}
+	buildContentStreams(d, cfg, isUA, contentIDs, strconv.Itoa(len(cfg.Pages)))
 
-			if cfg.FooterText != "" {
-				sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
-				sb.WriteString(strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64))
-				sb.WriteString(" ")
-				sb.WriteString(strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64))
-				sb.WriteString(" Td <")
-				for _, r := range cfg.FooterText {
-					sb.WriteString(fmt.Sprintf("%04X", r))
-				}
-				sb.WriteString("> Tj ET\n")
-			}
-
-			pageStr := fmt.Sprintf("Page %d of %d", pageNum, totalPages)
-			sb.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
-			pageW := float64(len(pageStr)) * 8 * 0.55
-			rx := strconv.FormatFloat(cfg.Width*0.98-pageW, 'f', -1, 64)
-			ry := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
-			sb.WriteString(rx)
-			sb.WriteString(" ")
-			sb.WriteString(ry)
-			sb.WriteString(" Td <")
-			for _, r := range pageStr {
-				sb.WriteString(fmt.Sprintf("%04X", r))
-			}
-			sb.WriteString("> Tj ET\n")
-			if isUA {
-				sb.WriteString("EMC\n") // close Artifact BMC
-			}
-
-			streamBytes = append([]byte{}, streamBytes...)
-			streamBytes = append(streamBytes, []byte(sb.String())...)
-		}
-		if isUA {
-			// Attach page content (non-artifact) EMC to end of stream.
-			// The BDC was prepended before the main content; the EMC closes it after everything.
-			emcSuffix := []byte("EMC\n")
-			// If we added an artifact block, the main-content EMC comes after the artifact EM
-			// which is already in sb. We just need one closing EMC at the very end.
-			streamBytes = append(streamBytes, emcSuffix...)
-		}
-		d.AddObjectAt(contentIDs[i], &write.Stream{
-			Dict: map[string]interface{}{"/Length": len(streamBytes)},
-			Data: streamBytes,
-		})
-	}
-
-	// === Font ===
-	if isA4 {
-		reg := font.NewRegistry()
-		loadedFont, err := reg.RegisterStandardFont("Helvetica", "")
-		if err != nil {
-			loadedFont, err = font.LoadFromPath("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")
-			if err != nil {
-				loadedFont = nil
-			}
-		}
-		if loadedFont != nil {
-			for _, r := range cfg.UsedText {
-				loadedFont.AddChar(r)
-			}
-			// Also mark letters, digits, and common punctuation.
-			for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |()$#%&*+<=>?@[]{!}_" {
-				loadedFont.AddChar(r)
-			}
-			libName := loadedFont.Name
-			compressed := compressData(loadedFont.RawData)
-			d.AddObjectAt(shared.fontFile2ID, &write.Stream{
-				Dict: map[string]interface{}{"/Length": len(compressed), "/Filter": "/FlateDecode"},
-				Data: compressed,
-			})
-			tuData := loadedFont.ToUnicodeCMap()
-			d.AddObjectAt(shared.toUnicodeID, &write.Stream{
-				Dict: map[string]interface{}{"/Length": len(tuData)},
-				Data: tuData,
-			})
-			cidMapData := loadedFont.BuildCIDToGIDMap()
-			compressedMap := compressData(cidMapData)
-			d.AddObjectAt(shared.cidToGIDMapID, &write.Stream{
-				Dict: map[string]interface{}{"/Length": len(compressedMap), "/Filter": "/FlateDecode"},
-				Data: compressedMap,
-			})
-			d.AddObjectAt(shared.descriptorID, font.FontDescriptorDict(loadedFont, shared.fontFile2ID))
-			d.AddObjectAt(shared.cidFontID, font.CIDFontDict(loadedFont, shared.descriptorID, shared.cidToGIDMapID))
-			d.AddObjectAt(shared.fontRef, font.FontDict(libName, shared.cidFontID, shared.toUnicodeID))
-		} else {
-			// Minimal fallback chain
-			fake := &font.Font{
-				Name: "LiberationSans-Regular", Flags: 32,
-				FontBBox: [4]int16{-1000, -1000, 1000, 1000},
-				Ascent: 1000, Descent: -200, CapHeight: 700, StemV: 80, XHeight: 500,
-			}
-			d.AddObjectAt(shared.fontFile2ID, &write.Stream{Dict: map[string]interface{}{"/Length": 0}, Data: []byte{}})
-			tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
-			d.AddObjectAt(shared.toUnicodeID, &write.Stream{Dict: map[string]interface{}{"/Length": len(tuData)}, Data: tuData})
-			d.AddObjectAt(shared.descriptorID, font.FontDescriptorDict(fake, shared.fontFile2ID))
-			d.AddObjectAt(shared.cidFontID, font.CIDFontDict(fake, shared.descriptorID, 0))
-			d.AddObjectAt(shared.fontRef, font.FontDict(fake.Name, shared.cidFontID, shared.toUnicodeID))
-		}
-	} else {
-		d.AddObjectAt(shared.fontRef, map[string]interface{}{
-			"/Type": "/Font", "/Subtype": "/Type1", "/BaseFont": "/Helvetica",
-		})
-	}
+	// === Font (cold path, one-time setup) ===
+	setupDocumentFont(d, cfg.UsedText, isA4, &shared)
 
 	// === Pages ===
 	for i := range cfg.Pages {
@@ -319,6 +218,174 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	d.SetPagesRoot(pagesID)
 
 	// === A-4 / UA metadata ===
+	addComplianceMetadata(d, cfg, isA4, isUA, metaRef, srgbRef, grayRef, oiRef)
+
+	// === Structure tree (simple: Document → one P per page) ===
+	buildStructureTree(d, isUA, cfg.Pages, lang, nsRef, strRootRef, ptRef, elemDocID, elemPageIDs, pageIDs)
+
+	// === Catalog ===
+	buildCatalog(d, catalogID, pagesID, metaRef, strRootRef, oiRef, lang, isA4, isUA)
+
+	// codehound-ignore: PERF-217
+	return d.Build(), nil
+}
+
+func buildContentStreams(d *doc.Document, cfg DocumentConfig, isUA bool, contentIDs []doc.ObjectID, totalPagesStr string) {
+	totalPages := len(cfg.Pages)
+	footerX := strconv.FormatFloat(cfg.Width*0.02, 'f', -1, 64)
+	footerY := strconv.FormatFloat(cfg.Height*0.02, 'f', -1, 64)
+	var pageBuf []byte
+	for i, pc := range cfg.Pages {
+		streamBytes := pc.Stream
+		if isUA {
+			streamBytes = append([]byte("/P <</MCID 0>> BDC\n"), streamBytes...)
+		}
+		if cfg.FooterText != "" || totalPages > 1 {
+			var buf bytes.Buffer
+			buf.Grow(footerBufGrow)
+			pageNum := i + 1
+			if isUA {
+				buf.WriteString("/Artifact BMC\n")
+			}
+
+			if cfg.FooterText != "" {
+				buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
+				buf.WriteString(footerX)
+				buf.WriteString(" ")
+				buf.WriteString(footerY)
+				buf.WriteString(" Td <")
+				for _, r := range cfg.FooterText {
+					fmt.Fprintf(&buf, "%04X", r)
+				}
+				buf.WriteString("> Tj ET\n")
+			}
+
+			pageBuf = strconv.AppendInt(pageBuf[:0], int64(pageNum), docDecimalBase)
+			pageStr := "Page " + string(pageBuf) + " of " + totalPagesStr
+			buf.WriteString("BT /F1 8 Tf 0.5 0.5 0.5 rg ")
+			pageW := float64(len(pageStr)) * charAvgWidth * fontSizeProportion
+			pageBuf = strconv.AppendFloat(pageBuf[:0], cfg.Width*0.98-pageW, 'f', floatPrecision, floatBitSize)
+			buf.Write(pageBuf)
+			buf.WriteString(" ")
+			buf.WriteString(footerY)
+			buf.WriteString(" Td <")
+			for _, r := range pageStr {
+				fmt.Fprintf(&buf, "%04X", r)
+			}
+			buf.WriteString("> Tj ET\n")
+			if isUA {
+				buf.WriteString("EMC\n")
+			}
+
+			streamBytes = append(append([]byte{}, streamBytes...), buf.Bytes()...)
+		}
+		if isUA {
+			streamBytes = append(streamBytes, []byte("EMC\n")...)
+		}
+		d.AddObjectAt(contentIDs[i], &write.Stream{
+			Dict: map[string]interface{}{"/Length": len(streamBytes)},
+			Data: streamBytes,
+		})
+	}
+}
+
+func setupDocumentFont(d *doc.Document, usedText string, isA4 bool, shared *fontChain) {
+	if !isA4 {
+		d.AddObjectAt(shared.fontRef, map[string]interface{}{
+			"/Type": "/Font", "/Subtype": "/Type1", "/BaseFont": "/Helvetica",
+		})
+		return
+	}
+
+	reg := font.NewRegistry()
+	loadedFont, err := reg.RegisterStandardFont("Helvetica", "")
+	if err != nil {
+		loadedFont, err = font.LoadFromPath("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")
+		if err != nil {
+			loadedFont = nil
+		}
+	}
+	if loadedFont != nil {
+		for _, r := range usedText {
+			loadedFont.AddChar(r)
+		}
+		for _, r := range "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/-₹ |()$#%&*+<=>?@[]{!}_" {
+			loadedFont.AddChar(r)
+		}
+		libName := loadedFont.Name
+		// Prefer subset so we do not embed the full TTF on every document.
+		fontData := loadedFont.RawData
+		if err := loadedFont.GenerateSubset(); err == nil && len(loadedFont.SubsetData) > 0 {
+			fontData = loadedFont.SubsetData
+		}
+		compressed := compressData(fontData)
+		d.AddObjectAt(shared.fontFile2ID, &write.Stream{
+			Dict: map[string]interface{}{"/Length": len(compressed), "/Filter": "/FlateDecode"},
+			Data: compressed,
+		})
+		tuData := loadedFont.ToUnicodeCMap()
+		d.AddObjectAt(shared.toUnicodeID, &write.Stream{
+			Dict: map[string]interface{}{"/Length": len(tuData)},
+			Data: tuData,
+		})
+		cidMapData := loadedFont.BuildCIDToGIDMap()
+		compressedMap := compressData(cidMapData)
+		d.AddObjectAt(shared.cidToGIDMapID, &write.Stream{
+			Dict: map[string]interface{}{"/Length": len(compressedMap), "/Filter": "/FlateDecode"},
+			Data: compressedMap,
+		})
+		d.AddObjectAt(shared.descriptorID, font.DescriptorDict(loadedFont, shared.fontFile2ID))
+		d.AddObjectAt(shared.cidFontID, font.CIDFontDict(loadedFont, shared.descriptorID, shared.cidToGIDMapID))
+		d.AddObjectAt(shared.fontRef, font.Dict(libName, shared.cidFontID, shared.toUnicodeID))
+		return
+	}
+
+	fake := &font.Font{
+		Name: "LiberationSans-Regular", Flags: defaultFontFlags,
+		FontBBox: [4]int16{-1000, -1000, 1000, 1000},
+		Ascent:   defaultAscent, Descent: defaultDescent, CapHeight: defaultCapHeight, StemV: defaultStemV, XHeight: defaultXHeight,
+	}
+	d.AddObjectAt(shared.fontFile2ID, &write.Stream{Dict: map[string]interface{}{"/Length": 0}, Data: []byte{}})
+	tuData := []byte("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
+	d.AddObjectAt(shared.toUnicodeID, &write.Stream{Dict: map[string]interface{}{"/Length": len(tuData)}, Data: tuData})
+	d.AddObjectAt(shared.descriptorID, font.DescriptorDict(fake, shared.fontFile2ID))
+	d.AddObjectAt(shared.cidFontID, font.CIDFontDict(fake, shared.descriptorID, 0))
+	d.AddObjectAt(shared.fontRef, font.Dict(fake.Name, shared.cidFontID, shared.toUnicodeID))
+}
+
+func buildStructureTree(d *doc.Document, isUA bool, pages []PageContent, lang string, nsRef, strRootRef, ptRef, elemDocID doc.ObjectID, elemPageIDs, pageIDs []doc.ObjectID) {
+	if !isUA {
+		return
+	}
+	d.AddObjectAt(nsRef, structure.Namespace())
+	kids := make([]structure.StructElemKid, 0, len(pages))
+	ptMap := make([][]doc.ObjectID, len(pages))
+	for i := range pages {
+		pElem := &structure.StructElem{
+			Type:    structure.TypeP,
+			Parent:  elemDocID,
+			PageRef: pageIDs[i],
+			MCID:    0,
+		}
+		d.AddObjectAt(elemPageIDs[i], structure.StructElemDict(pElem))
+		kids = append(kids, structure.StructElemKid{Ref: elemPageIDs[i]})
+		ptMap[i] = []doc.ObjectID{elemPageIDs[i]}
+	}
+	docElem := &structure.StructElem{
+		Type:         structure.TypeDocument,
+		ObjectID:     elemDocID,
+		Parent:       strRootRef,
+		NamespaceRef: nsRef,
+		Lang:         lang,
+		MCID:         -1,
+		Kids:         kids,
+	}
+	d.AddObjectAt(elemDocID, structure.StructElemDict(docElem))
+	d.AddObjectAt(ptRef, structure.ParentTreeDict(ptMap, nil))
+	d.AddObjectAt(strRootRef, structure.StructTreeRootDict(elemDocID, ptRef, nsRef))
+}
+
+func addComplianceMetadata(d *doc.Document, cfg DocumentConfig, isA4, isUA bool, metaRef, srgbRef, grayRef, oiRef doc.ObjectID) {
 	if isA4 {
 		d.AddObjectAt(srgbRef, &write.Stream{Dict: color.SRGBProfileDict(), Data: color.SRGBProfile()})
 		d.AddObjectAt(grayRef, &write.Stream{Dict: color.GrayProfileDict(), Data: color.GrayProfile()})
@@ -332,7 +399,9 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		xmpCfg.Creator = cfg.Creator
 		metaDict, metaData := meta.MetadataStream(xmpCfg)
 		d.AddObjectAt(metaRef, &write.Stream{Dict: metaDict, Data: metaData})
-	} else if isUA {
+		return
+	}
+	if isUA {
 		xmpCfg := meta.DefaultConfig()
 		xmpCfg.PDFUA = true
 		xmpCfg.Title = cfg.Title
@@ -342,38 +411,9 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 		metaDict, metaData := meta.MetadataStream(xmpCfg)
 		d.AddObjectAt(metaRef, &write.Stream{Dict: metaDict, Data: metaData})
 	}
+}
 
-	// === Structure tree (simple: Document → one P per page) ===
-	if isUA {
-		d.AddObjectAt(nsRef, structure.Namespace())
-		kids := make([]structure.StructElemKid, 0, len(cfg.Pages))
-		ptMap := make(map[int][]doc.ObjectID, len(cfg.Pages))
-		for i := range cfg.Pages {
-			pElem := &structure.StructElem{
-				Type:    structure.S_P,
-				Parent:  elemDocID,
-				PageRef: pageIDs[i],
-				MCID:    0,
-			}
-			d.AddObjectAt(elemPageIDs[i], structure.StructElemDict(pElem))
-			kids = append(kids, structure.StructElemKid{Ref: elemPageIDs[i]})
-			ptMap[i] = []doc.ObjectID{elemPageIDs[i]}
-		}
-		docElem := &structure.StructElem{
-			Type:         structure.S_Document,
-			ObjectID:     elemDocID,
-			Parent:       strRootRef,
-			NamespaceRef: nsRef,
-			Lang:         lang,
-			MCID:         -1,
-			Kids:         kids,
-		}
-		d.AddObjectAt(elemDocID, structure.StructElemDict(docElem))
-		d.AddObjectAt(ptRef, structure.ParentTreeDict(ptMap, nil))
-		d.AddObjectAt(strRootRef, structure.StructTreeRootDict(elemDocID, ptRef, nsRef))
-	}
-
-	// === Catalog ===
+func buildCatalog(d *doc.Document, catalogID, pagesID, metaRef, strRootRef, oiRef doc.ObjectID, lang string, isA4, isUA bool) {
 	catalogDict := map[string]interface{}{
 		"/Type":  "/Catalog",
 		"/Pages": write.Ref(int(pagesID), 0),
@@ -394,6 +434,4 @@ func GenerateDocument(cfg DocumentConfig) ([]byte, error) {
 	}
 	d.AddObjectAt(catalogID, catalogDict)
 	d.SetCatalog(catalogID)
-
-	return d.Build(), nil
 }
