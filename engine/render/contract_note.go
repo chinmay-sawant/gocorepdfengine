@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	pageW   = 595.0 // A4
-	pageH   = 842.0
-	marginL = 36.0
-	marginR = 36.0
-	marginT = 40.0
-	marginB = 40.0
-	font    = "Helvetica"
+	pageW      = 595.0 // A4
+	pageH      = 842.0
+	marginL    = 36.0
+	marginR    = 36.0
+	marginT    = 40.0
+	marginB    = 40.0
+	font       = "Helvetica"
+	actionSell = "SELL"
 )
 
 // Options controls compliance mode for rendering.
@@ -43,7 +44,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	res, err := tl.LayOut(marginL, marginT, pageW, pageH-marginB, start)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("layout: %w", err)
 	}
 
 	pages := make([]engine.PageContent, 0, len(res.Builders))
@@ -62,6 +63,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 
 	var used strings.Builder
 	used.WriteString(note.Title)
+	used.WriteString(note.Watermark)
 	used.WriteString(note.Client.Name)
 	used.WriteString(note.Client.Code)
 	used.WriteString(note.Client.PAN)
@@ -99,7 +101,7 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 	used.WriteString(footerText)
 	used.WriteString("Page 000 of 000")
 
-	return engine.GenerateDocument(engine.DocumentConfig{
+	data, err := engine.GenerateDocument(engine.DocumentConfig{
 		Width:      pageW,
 		Height:     pageH,
 		Mode:       mode,
@@ -112,6 +114,10 @@ func PDF(note *model.ContractNote, opts Options) ([]byte, error) {
 		UsedText:   used.String(),
 		FooterText: footerText,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("generating document: %w", err)
+	}
+	return data, nil
 }
 
 func scaleCols(tl *layout.TableLayout, contentW float64) {
@@ -163,7 +169,7 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
 			layout.StyledCell("", font, 10, color.ThemeHeaderSub, &bgH, 0, 45),
-			layout.StyledCell(fmt.Sprintf("CN2024001 | %s", dateStr), font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
+			layout.StyledCell("CN2024001 | "+dateStr, font, 11, color.ThemeHeaderSub, &bgH, 0, 45),
 		},
 	})
 
@@ -203,7 +209,7 @@ func buildRetail(note *model.ContractNote) *layout.TableLayout {
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
 		tl.Rows = append(tl.Rows, layout.Row{
@@ -286,7 +292,7 @@ func buildActive(note *model.ContractNote) *layout.TableLayout {
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
 		tl.Rows = append(tl.Rows, layout.Row{
@@ -374,7 +380,7 @@ func buildHFT(note *model.ContractNote) *layout.TableLayout {
 			bg = &c
 		}
 		afg := color.ThemeBuy
-		if t.Action == "SELL" {
+		if t.Action == actionSell {
 			afg = color.ThemeSell
 		}
 		tl.Rows = append(tl.Rows, layout.Row{

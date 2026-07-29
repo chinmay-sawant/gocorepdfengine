@@ -1,0 +1,23 @@
+# Zerodha x10 latest summary (gocorepdfengine harness)
+
+Runs: 10
+Best throughput: 1206.68 ops/sec
+Worst throughput: 1137.15 ops/sec
+Mean throughput: 1171.68 ops/sec
+Median throughput: 1174.06 ops/sec
+Stddev throughput: 25.56 ops/sec
+Mean avg latency: 40.373 ms
+Mean peak allocated: 435.99 MB
+
+| Run | Throughput | Avg latency | Peak allocated |
+|-----|-----------:|------------:|---------------:|
+| zerodha_run1.txt | 1206.68 ops/sec | 39.214 ms | 451.10 MB |
+| zerodha_run2.txt | 1141.48 ops/sec | 41.475 ms | 457.56 MB |
+| zerodha_run3.txt | 1137.15 ops/sec | 41.538 ms | 401.80 MB |
+| zerodha_run4.txt | 1195.90 ops/sec | 39.500 ms | 421.77 MB |
+| zerodha_run5.txt | 1188.85 ops/sec | 39.774 ms | 436.38 MB |
+| zerodha_run6.txt | 1170.97 ops/sec | 40.405 ms | 393.97 MB |
+| zerodha_run7.txt | 1160.02 ops/sec | 40.746 ms | 448.92 MB |
+| zerodha_run8.txt | 1177.14 ops/sec | 40.126 ms | 432.52 MB |
+| zerodha_run9.txt | 1196.64 ops/sec | 39.503 ms | 415.09 MB |
+| zerodha_run10.txt | 1142.00 ops/sec | 41.453 ms | 500.82 MB |

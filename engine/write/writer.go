@@ -19,6 +19,7 @@ func NewEncoder() *Encoder {
 }
 
 func (e *Encoder) Write(p []byte) (int, error) {
+	//nolint:wrapcheck
 	return e.buf.Write(p)
 }
 
@@ -106,7 +107,7 @@ func (e *Encoder) WriteXref(offsets []int64) {
 	fmt.Fprintf(&e.buf, "xref\n0 %d\n", len(offsets))
 	for i, off := range offsets {
 		if i == 0 {
-			fmt.Fprintf(&e.buf, "%010d %05d f \n", off, 65535)
+			fmt.Fprintf(&e.buf, "%010d %05d f \n", off, 65535) //nolint:mnd
 		} else {
 			fmt.Fprintf(&e.buf, "%010d %05d n \n", off, 0)
 		}
@@ -185,8 +186,8 @@ func DateString(t time.Time) string {
 	return fmt.Sprintf("D:%s%c%02d'%02d'",
 		t.Format("20060102150405"),
 		sign,
-		offset/3600,
-		(offset%3600)/60,
+		offset/3600,      //nolint:mnd
+		(offset%3600)/60, //nolint:mnd
 	)
 }
 

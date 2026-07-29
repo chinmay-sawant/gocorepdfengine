@@ -28,9 +28,9 @@ func ParseHex(s string) (RGB, error) {
 			return RGB{}, fmt.Errorf("invalid hex color %q: %w", s, err)
 		}
 		return RGB{
-			float64((n>>16)&0xff) / 255,
-			float64((n>>8)&0xff) / 255,
-			float64(n&0xff) / 255,
+			float64((n>>16)&0xff) / 255, //nolint:mnd
+			float64((n>>8)&0xff) / 255,  //nolint:mnd
+			float64(n&0xff) / 255,       //nolint:mnd
 		}, nil
 	default:
 		return RGB{}, fmt.Errorf("invalid hex color length %q", s)
@@ -48,18 +48,18 @@ func MustHex(s string) RGB {
 
 // Zerodha-style theme used by contract-note layout.
 var (
-	ThemeHeaderBG   = MustHex("#154360")
-	ThemeHeaderFG   = MustHex("#FFFFFF")
-	ThemeHeaderSub  = MustHex("#AED6F1")
-	ThemeSectionBG  = MustHex("#21618C")
-	ThemeSectionFG  = MustHex("#FFFFFF")
-	ThemeTableHead  = MustHex("#D4E6F1")
-	ThemeAltRow     = MustHex("#F8F9F9")
-	ThemeInfoRow    = MustHex("#EBF5FB")
-	ThemeSummaryBG  = MustHex("#A9CCE3")
-	ThemeBuy        = MustHex("#27AE60")
-	ThemeSell       = MustHex("#E74C3C")
-	ThemeLink       = MustHex("#2E86C1")
-	ThemeBlack      = RGB{0, 0, 0}
-	ThemeWhite      = RGB{1, 1, 1}
+	ThemeHeaderBG  = MustHex("#154360")
+	ThemeHeaderFG  = MustHex("#FFFFFF")
+	ThemeHeaderSub = MustHex("#AED6F1")
+	ThemeSectionBG = MustHex("#21618C")
+	ThemeSectionFG = MustHex("#FFFFFF")
+	ThemeTableHead = MustHex("#D4E6F1")
+	ThemeAltRow    = MustHex("#F8F9F9")
+	ThemeInfoRow   = MustHex("#EBF5FB")
+	ThemeSummaryBG = MustHex("#A9CCE3")
+	ThemeBuy       = MustHex("#27AE60")
+	ThemeSell      = MustHex("#E74C3C")
+	ThemeLink      = MustHex("#2E86C1")
+	ThemeBlack     = RGB{0, 0, 0}
+	ThemeWhite     = RGB{1, 1, 1}
 )

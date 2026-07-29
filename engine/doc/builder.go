@@ -14,9 +14,9 @@ type ObjectID uint32
 type Mode uint32
 
 const (
-	ModePDF20     Mode = 1 << 0
-	ModePDFA4     Mode = 1 << 1
-	ModePDFUA2    Mode = 1 << 2
+	ModePDF20      Mode = 1 << 0
+	ModePDFA4      Mode = 1 << 1
+	ModePDFUA2     Mode = 1 << 2
 	ModeEmbedFonts Mode = 1 << 3
 )
 
@@ -120,7 +120,7 @@ func (d *Document) Build() []byte {
 			enc.WriteStream(dict, data.Data)
 			enc.WriteString("\n")
 		case []byte:
-			enc.Write(data)
+			_, _ = enc.Write(data)
 			enc.WriteString("\n")
 		default:
 			fmt.Fprintf(enc, "%v\n", data)

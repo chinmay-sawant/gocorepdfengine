@@ -2,6 +2,7 @@ package font
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -37,7 +38,7 @@ func (f *Font) UsedChars() []rune {
 
 func (f *Font) GenerateSubset() error {
 	if len(f.RawData) < 12 {
-		return fmt.Errorf("font: no raw data to subset")
+		return errors.New("font: no raw data to subset")
 	}
 
 	usedGIDs := buildUsedGIDSet(f)
@@ -58,7 +59,8 @@ func (f *Font) GenerateSubset() error {
 		"head": true, "hhea": true, "hmtx": true,
 		"maxp": true, "glyf": true, "loca": true,
 		"cmap": true, "name": true, "OS/2": true,
-		"post": true, "cvt ": true, "prep": true,
+		"post": true, "cvt ": true, //nolint:gocritic // TTF table tag "cvt "
+		"prep": true,
 		"fpgm": true, "cvt": true,
 	}
 
@@ -68,7 +70,7 @@ func (f *Font) GenerateSubset() error {
 	}
 
 	if len(subset) < 12 {
-		return fmt.Errorf("font: generated subset is invalid (too short)")
+		return errors.New("font: generated subset is invalid (too short)")
 	}
 
 	f.SubsetData = subset
@@ -87,74 +89,44 @@ func pad4(n uint32) uint32 {
 	return (n + 3) & ^uint32(3)
 }
 
-func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[uint16]bool, required map[string]bool) ([]byte, error) {
-	gidList := make([]uint16, 0, len(usedGIDs))
-	for gid := range usedGIDs {
-		gidList = append(gidList, gid)
+func extractGlyphData(oldGID uint16, locaTable, glyfTable []byte, locaFormat uint16) ([]byte, uint32) {
+	if len(locaTable) == 0 || len(glyfTable) == 0 {
+		return nil, 0
 	}
-	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
-
-	maxpData, _ := findTable(orig, "maxp")
-	oldNumGlyphs := uint16(0)
-	if maxpData != nil && len(maxpData) >= 6 {
-		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[4:])
-	}
-
-	headData, _ := findTable(orig, "head")
-	locaFormat := uint16(0)
-	if headData != nil && len(headData) >= 52 {
-		locaFormat = binary.BigEndian.Uint16(headData[50:])
-	}
-
-	hheaData, _ := findTable(orig, "hhea")
-	numHMetrics := oldNumGlyphs
-	if hheaData != nil && len(hheaData) >= 36 {
-		numHMetrics = binary.BigEndian.Uint16(hheaData[34:])
-	}
-
-	glyfTable, _ := findTable(orig, "glyf")
-	locaTable, _ := findTable(orig, "loca")
-	hmtxTable, _ := findTable(orig, "hmtx")
-
-	type glyphEntry struct {
-		gid    uint16
-		data   []byte
-		length uint32
-		width  uint16
-	}
-	var glyphs []glyphEntry
-
-	gidMap := make(map[uint16]uint16)
-	for newID, oldGID := range gidList {
-		gidMap[oldGID] = uint16(newID)
-	}
-	f.SubGIDMap = gidMap
-
-	for _, oldGID := range gidList {
-		var data []byte
-		var length uint32
-
-		if glyfTable != nil && locaTable != nil {
-			var glyphOffset, nextOffset uint32
-			if locaFormat == 0 {
-				off := uint32(oldGID) * 2
-				if uint32(len(locaTable)) >= off+4 {
-					glyphOffset = uint32(binary.BigEndian.Uint16(locaTable[off:])) * 2
-					nextOffset = uint32(binary.BigEndian.Uint16(locaTable[off+2:])) * 2
-				}
-			} else {
-				off := uint32(oldGID) * 4
-				if uint32(len(locaTable)) >= off+8 {
-					glyphOffset = binary.BigEndian.Uint32(locaTable[off:])
-					nextOffset = binary.BigEndian.Uint32(locaTable[off+4:])
-				}
-			}
-			length = nextOffset - glyphOffset
-			if length > 0 && uint32(len(glyfTable)) >= glyphOffset+length {
-				data = make([]byte, length)
-				copy(data, glyfTable[glyphOffset:glyphOffset+length])
-			}
+	var glyphOffset, nextOffset uint32
+	if locaFormat == 0 {
+		off := uint32(oldGID) * 2
+		if uint32(len(locaTable)) >= off+4 {
+			glyphOffset = uint32(binary.BigEndian.Uint16(locaTable[off:])) * 2
+			nextOffset = uint32(binary.BigEndian.Uint16(locaTable[off+2:])) * 2
 		}
+	} else {
+		off := uint32(oldGID) * 4
+		if uint32(len(locaTable)) >= off+8 {
+			glyphOffset = binary.BigEndian.Uint32(locaTable[off:])
+			nextOffset = binary.BigEndian.Uint32(locaTable[off+4:])
+		}
+	}
+	length := nextOffset - glyphOffset
+	if length > 0 && uint32(len(glyfTable)) >= glyphOffset+length {
+		data := make([]byte, length)
+		copy(data, glyfTable[glyphOffset:glyphOffset+length])
+		return data, length
+	}
+	return nil, 0
+}
+
+type glyphEntry struct {
+	gid    uint16
+	data   []byte
+	length uint32
+	width  uint16
+}
+
+func buildGlyphEntries(gidList []uint16, locaTable, glyfTable, hmtxTable []byte, locaFormat, numHMetrics uint16) []glyphEntry {
+	glyphs := make([]glyphEntry, 0, len(gidList))
+	for _, oldGID := range gidList {
+		data, length := extractGlyphData(oldGID, locaTable, glyfTable, locaFormat)
 
 		var width uint16
 		if hmtxTable != nil {
@@ -169,32 +141,10 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 			gid: oldGID, data: data, length: length, width: width,
 		})
 	}
+	return glyphs
+}
 
-	newNumGlyphs := uint16(len(glyphs))
-
-	var newLocaData []byte
-	if locaFormat == 0 {
-		var glyphOffset uint32 = 0
-		for i, ge := range glyphs {
-			b := make([]byte, 4)
-			binary.BigEndian.PutUint16(b[0:], uint16(glyphOffset/2))
-			glyphOffset += pad4(ge.length)
-			binary.BigEndian.PutUint16(b[2:], uint16(glyphOffset/2))
-			newLocaData = append(newLocaData, b...)
-			_ = i
-		}
-	} else {
-		var glyphOffset uint32 = 0
-		for i, ge := range glyphs {
-			b := make([]byte, 8)
-			binary.BigEndian.PutUint32(b[0:], glyphOffset)
-			glyphOffset += pad4(ge.length)
-			binary.BigEndian.PutUint32(b[4:], glyphOffset)
-			newLocaData = append(newLocaData, b...)
-			_ = i
-		}
-	}
-
+func buildGlyfAndHmtxData(glyphs []glyphEntry) ([]byte, []byte) {
 	var newGlyfData []byte
 	for _, ge := range glyphs {
 		newGlyfData = append(newGlyfData, ge.data...)
@@ -203,7 +153,6 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 			newGlyfData = append(newGlyfData, 0)
 		}
 	}
-
 	var newHmtxData []byte
 	for _, ge := range glyphs {
 		b := make([]byte, 2)
@@ -214,9 +163,94 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 		b := make([]byte, 2)
 		newHmtxData = append(newHmtxData, b...)
 	}
+	return newGlyfData, newHmtxData
+}
+
+func buildCMapTable(f *Font, gidMap map[uint16]uint16) []byte {
+	usedChars := f.UsedChars()
+	subtable := buildFormat4CMap(usedChars, gidMap)
+	headerLen := uint32(4 + 8)
+	cmap := make([]byte, headerLen+uint32(len(subtable)))
+	binary.BigEndian.PutUint16(cmap, 0)
+	binary.BigEndian.PutUint16(cmap[2:], 1)
+	binary.BigEndian.PutUint16(cmap[4:], 3)
+	binary.BigEndian.PutUint16(cmap[6:], 1)
+	binary.BigEndian.PutUint32(cmap[8:], headerLen)
+	copy(cmap[headerLen:], subtable)
+	return cmap
+}
+
+func buildLocaData(glyphs []glyphEntry, locaFormat uint16) []byte {
+	var newLocaData []byte
+	if locaFormat == 0 {
+		var glyphOffset uint32
+		for i, ge := range glyphs {
+			b := make([]byte, 4)
+			binary.BigEndian.PutUint16(b[0:], uint16(glyphOffset/2))
+			glyphOffset += pad4(ge.length)
+			binary.BigEndian.PutUint16(b[2:], uint16(glyphOffset/2))
+			newLocaData = append(newLocaData, b...)
+			_ = i
+		}
+	} else {
+		var glyphOffset uint32
+		for i, ge := range glyphs {
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint32(b[0:], glyphOffset)
+			glyphOffset += pad4(ge.length)
+			binary.BigEndian.PutUint32(b[4:], glyphOffset)
+			newLocaData = append(newLocaData, b...)
+			_ = i
+		}
+	}
+	return newLocaData
+}
+
+func buildSubsetTTF(f *Font, orig []byte, _ []tableDirEntry, usedGIDs map[uint16]bool, _ map[string]bool) ([]byte, error) {
+	gidList := make([]uint16, 0, len(usedGIDs))
+	for gid := range usedGIDs {
+		gidList = append(gidList, gid)
+	}
+	sort.Slice(gidList, func(i, j int) bool { return gidList[i] < gidList[j] })
+
+	maxpData, _ := findTable(orig, "maxp")
+	oldNumGlyphs := uint16(0)
+	if len(maxpData) >= 6 {
+		oldNumGlyphs = binary.BigEndian.Uint16(maxpData[4:])
+	}
+
+	headData, _ := findTable(orig, "head")
+	locaFormat := uint16(0)
+	if len(headData) >= 52 {
+		locaFormat = binary.BigEndian.Uint16(headData[50:])
+	}
+
+	hheaData, _ := findTable(orig, "hhea")
+	numHMetrics := oldNumGlyphs
+	if len(hheaData) >= 36 {
+		numHMetrics = binary.BigEndian.Uint16(hheaData[34:])
+	}
+
+	glyfTable, _ := findTable(orig, "glyf")
+	locaTable, _ := findTable(orig, "loca")
+	hmtxTable, _ := findTable(orig, "hmtx")
+
+	gidMap := make(map[uint16]uint16)
+	for newID, oldGID := range gidList {
+		gidMap[oldGID] = uint16(newID)
+	}
+	f.SubGIDMap = gidMap
+
+	glyphs := buildGlyphEntries(gidList, locaTable, glyfTable, hmtxTable, locaFormat, numHMetrics)
+
+	newNumGlyphs := uint16(len(glyphs))
+
+	newLocaData := buildLocaData(glyphs, locaFormat)
+
+	newGlyfData, newHmtxData := buildGlyfAndHmtxData(glyphs)
 
 	var newMaxpData []byte
-	if maxpData != nil && len(maxpData) >= 6 {
+	if len(maxpData) >= 6 {
 		newMaxpData = make([]byte, len(maxpData))
 		copy(newMaxpData, maxpData)
 		binary.BigEndian.PutUint16(newMaxpData[4:], newNumGlyphs)
@@ -228,39 +262,25 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 	}
 
 	var newHeadData []byte
-	if headData != nil && len(headData) >= 54 {
+	if len(headData) >= 54 {
 		newHeadData = make([]byte, len(headData))
 		copy(newHeadData, headData)
 		binary.BigEndian.PutUint16(newHeadData[50:], locaFormat)
 		binary.BigEndian.PutUint32(newHeadData[8:], 0)
 	} else {
-		return nil, fmt.Errorf("font: head table missing")
+		return nil, errors.New("font: head table missing")
 	}
 
 	var newHheaData []byte
-	if hheaData != nil && len(hheaData) >= 36 {
+	if len(hheaData) >= 36 {
 		newHheaData = make([]byte, len(hheaData))
 		copy(newHheaData, hheaData)
 		binary.BigEndian.PutUint16(newHheaData[34:], newNumGlyphs)
 	} else {
-		return nil, fmt.Errorf("font: hhea table missing")
+		return nil, errors.New("font: hhea table missing")
 	}
 
-	var newCMapData []byte
-	{
-		usedChars := f.UsedChars()
-		subtable := buildFormat4CMap(usedChars, gidMap)
-		// Wrap in cmap table header (version + numTables + encoding record)
-		headerLen := uint32(4 + 8)
-		cmap := make([]byte, headerLen+uint32(len(subtable)))
-		binary.BigEndian.PutUint16(cmap, 0)      // version
-		binary.BigEndian.PutUint16(cmap[2:], 1)   // numTables
-		binary.BigEndian.PutUint16(cmap[4:], 3)   // platformID = Microsoft
-		binary.BigEndian.PutUint16(cmap[6:], 1)   // encodingID = Unicode BMP
-		binary.BigEndian.PutUint32(cmap[8:], headerLen) // offset to subtable
-		copy(cmap[headerLen:], subtable)
-		newCMapData = cmap
-	}
+	newCMapData := buildCMapTable(f, gidMap)
 
 	copyTable := func(tag string) []byte {
 		d, err := findTable(orig, tag)
@@ -316,7 +336,7 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 	for 1<<(entrySelector+1) <= numTables {
 		entrySelector++
 	}
-	searchRange := uint16(1 << entrySelector) * 16
+	searchRange := uint16(1<<entrySelector) * 16
 	rangeShift := numTables*16 - searchRange
 
 	header := make([]byte, 12)
@@ -333,7 +353,7 @@ func buildSubsetTTF(f *Font, orig []byte, entries []tableDirEntry, usedGIDs map[
 		length uint32
 	}
 
-	var tableInfos []tableInfo
+	tableInfos := make([]tableInfo, 0, len(tables))
 	off := uint32(12) + uint32(numTables)*16
 	for _, t := range tables {
 		length := uint32(len(t.data))
@@ -441,7 +461,7 @@ func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
 	startCodes[segCount-1] = 0xFFFF
 	idDeltas[segCount-1] = 1
 
-	var glyphIDArray []uint16
+	glyphIDArray := make([]uint16, 0, len(sorted))
 	for _, r := range sorted {
 		glyphIDArray = append(glyphIDArray, gidMap[r])
 	}
@@ -467,7 +487,7 @@ func buildFormat4CMap(usedChars []rune, gidMap map[uint16]uint16) []byte {
 	for 1<<(srEntrySelector+1) <= uint16(segCount) {
 		srEntrySelector++
 	}
-	srSearchRangeBytes := uint16(1 << srEntrySelector) * 2
+	srSearchRangeBytes := uint16(1<<srEntrySelector) * 2
 	binary.BigEndian.PutUint16(data[8:], srSearchRangeBytes)
 	binary.BigEndian.PutUint16(data[10:], srEntrySelector)
 	binary.BigEndian.PutUint16(data[12:], uint16(segCount)*2-srSearchRangeBytes)
@@ -520,4 +540,3 @@ func buildEmptyFormat4CMap() []byte {
 	binary.BigEndian.PutUint16(data[22:], 0)
 	return data
 }
-

@@ -10,25 +10,25 @@ import (
 type StructType string
 
 const (
-	S_Document StructType = "/Document"
-	S_Part     StructType = "/Part"
-	S_Sect     StructType = "/Sect"
-	S_Div      StructType = "/Div"
-	S_H1       StructType = "/H1"
-	S_H2       StructType = "/H2"
-	S_P        StructType = "/P"
-	S_Table    StructType = "/Table"
-	S_TR       StructType = "/TR"
-	S_TH       StructType = "/TH"
-	S_TD       StructType = "/TD"
-	S_Figure   StructType = "/Figure"
-	S_Link     StructType = "/Link"
-	S_Caption  StructType = "/Caption"
-	S_L        StructType = "/L"
-	S_LI       StructType = "/LI"
-	S_Lbl      StructType = "/Lbl"
-	S_LBody    StructType = "/LBody"
-	S_Form     StructType = "/Form"
+	SDocument StructType = "/Document"
+	SPart     StructType = "/Part"
+	SSect     StructType = "/Sect"
+	SDiv      StructType = "/Div"
+	SH1       StructType = "/H1"
+	SH2       StructType = "/H2"
+	SP        StructType = "/P"
+	STable    StructType = "/Table"
+	STR       StructType = "/TR"
+	STH       StructType = "/TH"
+	STD       StructType = "/TD"
+	SFigure   StructType = "/Figure"
+	SLink     StructType = "/Link"
+	SCaption  StructType = "/Caption"
+	SL        StructType = "/L"
+	SLI       StructType = "/LI"
+	SLbl      StructType = "/Lbl"
+	SLBody    StructType = "/LBody"
+	SForm     StructType = "/Form"
 )
 
 type StructElem struct {
@@ -104,15 +104,16 @@ func StructElemDict(se *StructElem) map[string]interface{} {
 	if len(se.Kids) > 0 {
 		kArray := make([]interface{}, 0, len(se.Kids))
 		for _, kid := range se.Kids {
-			if kid.OBJR != nil {
+			switch {
+			case kid.OBJR != nil:
 				kArray = append(kArray, map[string]interface{}{
 					"/Type": "/OBJR",
 					"/Obj":  fmt.Sprintf("%d 0 R", kid.OBJR.ObjRef),
 					"/Pg":   fmt.Sprintf("%d 0 R", kid.OBJR.PageRef),
 				})
-			} else if kid.IsMCID {
+			case kid.IsMCID:
 				kArray = append(kArray, kid.MCID)
-			} else {
+			default:
 				kArray = append(kArray, fmt.Sprintf("%d 0 R", kid.Ref))
 			}
 		}

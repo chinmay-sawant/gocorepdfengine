@@ -56,6 +56,27 @@ func TestContentBuilder_FontMapping(t *testing.T) {
 	}
 }
 
+func TestPlaceWatermark_UsesCIDEncoding(t *testing.T) {
+	cb := NewContentBuilder(595, 842)
+	cb.PlaceWatermark("CONFIDENTIAL", 595, 842)
+
+	output := string(cb.Bytes())
+	if strings.Contains(output, "(CONFIDENTIAL) Tj") {
+		t.Error("watermark must not use PDF literal string under Identity-H")
+	}
+	// "CONFIDENTIAL" as UTF-16BE code units (one CID per character)
+	want := "<0043004F004E0046004900440045004E005400490041004C> Tj"
+	if !strings.Contains(output, want) {
+		t.Errorf("expected CID hex encoding %q in stream, got:\n%s", want, output)
+	}
+	if !strings.Contains(output, "/Artifact") {
+		t.Error("expected watermark to be marked as Artifact")
+	}
+	if !strings.Contains(output, "EMC") {
+		t.Error("expected EMC after watermark Artifact")
+	}
+}
+
 func TestDrawRect_Fill(t *testing.T) {
 	cb := NewContentBuilder(612, 792)
 	fill := [3]float64{0.5, 0.5, 0.5}

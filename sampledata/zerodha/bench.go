@@ -4,6 +4,7 @@
 // Modes:
 //   - compliant (!nocomply): PDF/A-4 + PDF/UA-2 flags
 //   - non-compliant (nocomply): PDF 2.0 only
+//
 // Cache:
 //   - BENCH_CACHE=1 (default): expand trades once; reuse models across iterations
 //   - BENCH_CACHE=0: re-expand trades + rebuild model every iteration
@@ -54,6 +55,7 @@ func runMain() {
 	}
 	if err := runBenchmark(); err != nil {
 		fmt.Println(err)
+		//nolint:gocritic
 		os.Exit(1)
 	}
 	if *flagMemProfile != "" {
@@ -85,23 +87,24 @@ func envCacheEnabled() bool {
 	return v != "0" && v != "false" && v != "off"
 }
 
-func loadBaseNotes() (retail, active, hft *model.ContractNote, err error) {
+func loadBaseNotes() (*model.ContractNote, *model.ContractNote, *model.ContractNote, error) {
 	// Templates live next to this package.
 	dir, err := os.Getwd()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("loadBaseNotes: getwd: %w", err)
 	}
+	var retail, active, hft *model.ContractNote
 	retail, err = model.LoadJSON(filepath.Join(dir, "retail_investor.json"))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("loadBaseNotes: retail_investor: %w", err)
 	}
 	active, err = model.LoadJSON(filepath.Join(dir, "active_trader.json"))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("loadBaseNotes: active_trader: %w", err)
 	}
 	hft, err = model.LoadJSON(filepath.Join(dir, "hft_algo.json"))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("loadBaseNotes: hft_algo: %w", err)
 	}
 	return retail, active, hft, nil
 }
@@ -115,7 +118,11 @@ func prepareNote(base *model.ContractNote, tradeCount int, seed int64) *model.Co
 }
 
 func renderNote(n *model.ContractNote) ([]byte, error) {
-	return render.PDF(n, render.Options{Compliant: benchCompliant})
+	data, err := render.PDF(n, render.Options{Compliant: benchCompliant})
+	if err != nil {
+		return nil, fmt.Errorf("renderNote: %w", err)
+	}
+	return data, nil
 }
 
 func monitorMemory(done chan bool, wg *sync.WaitGroup) {
@@ -374,7 +381,7 @@ func runBenchmark() error {
 			outputName("zerodha_active_output.pdf"): activePDF,
 			outputName("zerodha_hft_output.pdf"):    hftPDF,
 		} {
-			if err := os.WriteFile(name, data, 0o644); err != nil {
+			if err := os.WriteFile(name, data, 0600); err != nil { //nolint:mnd
 				fmt.Printf("Error saving %s: %v\n", name, err)
 			} else {
 				fmt.Printf("Saved: %s (%d bytes)\n", name, len(data))
